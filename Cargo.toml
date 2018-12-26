@@ -5,3 +5,9 @@ authors = ["Daniël de Kok <me@danieldk.eu>"]
 edition = "2018"
 
 [dependencies]
+ndarray = "0.12"
+num-traits = "0.2"
+
+[dev-dependencies]
+ndarray-rand = "0.9"
+rand = "0.6"
