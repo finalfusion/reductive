@@ -7,7 +7,7 @@ use ndarray_rand::RandomExt;
 use rand::distributions::Normal;
 use test::Bencher;
 
-use reductive::linalg::Covariance;
+use reductive::linalg::{Covariance, SquaredEuclideanDistance};
 
 #[bench]
 fn covariance_axis0(bencher: &mut Bencher) {
@@ -24,5 +24,41 @@ fn covariance_axis1(bencher: &mut Bencher) {
 
     bencher.iter(|| {
         data.view().covariance(Axis(1));
+    })
+}
+
+#[bench]
+fn squared_euclidean_distance_ix1_ix1(bencher: &mut Bencher) {
+    let data1: Array2<f64> = Array2::random((200, 50), Normal::new(1., 0.2));
+    let data2: Array2<f64> = Array2::random((50, 50), Normal::new(1., 0.2));
+
+    bencher.iter(|| {
+        for row1 in data1.outer_iter() {
+            for row2 in data2.outer_iter() {
+                row1.squared_euclidean_distance(row2);
+            }
+        }
+    })
+}
+
+#[bench]
+fn squared_euclidean_distance_ix1_ix2(bencher: &mut Bencher) {
+    let data1: Array2<f64> = Array2::random((200, 50), Normal::new(1., 0.2));
+    let data2: Array2<f64> = Array2::random((50, 50), Normal::new(1., 0.2));
+
+    bencher.iter(|| {
+        for row in data1.outer_iter() {
+            row.squared_euclidean_distance(data2.view());
+        }
+    })
+}
+
+#[bench]
+fn squared_euclidean_distance_ix2_ix2(bencher: &mut Bencher) {
+    let data1: Array2<f64> = Array2::random((200, 50), Normal::new(1., 0.2));
+    let data2: Array2<f64> = Array2::random((50, 50), Normal::new(1., 0.2));
+
+    bencher.iter(|| {
+        data1.view().squared_euclidean_distance(data2.view());
     })
 }
