@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 ndarray = "0.12"
 num-traits = "0.2"
+ordered-float = "1"
 rand = "0.6"
 
 [dev-dependencies]
