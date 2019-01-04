@@ -152,9 +152,8 @@ fn update_centroids<A>(
         centroid_counts[*assignment] += A::one();
     }
 
-    for (mut centroid, centroid_count) in centroids
-        .axis_iter_mut(instance_axis)
-        .zip(centroid_counts.outer_iter())
+    for (mut centroid, centroid_count) in
+        centroids.outer_iter_mut().zip(centroid_counts.outer_iter())
     {
         if centroid_count[()] > A::zero() {
             centroid /= &centroid_count;
