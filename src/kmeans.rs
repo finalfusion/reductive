@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::iter::Sum;
 
 use ndarray::{Array1, Array2, ArrayBase, ArrayView2, ArrayViewMut2, Axis, Data, Ix2, NdFloat};
+use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 use rand::distributions::{Distribution, Uniform};
 use rand::Rng;
@@ -161,11 +162,181 @@ fn update_centroids<A>(
     }
 }
 
+/// Trait for types that implement k-means clustering.
+pub trait KMeans<A> {
+    /// Perform k-means clustering.
+    ///
+    /// Performs k-means clustering on the matrix of instances along the
+    /// given `instance_axis`.
+    ///
+    /// Returns the *k x d* matrix of cluster centroids and the mean
+    /// mean-squared error.
+    fn k_means(
+        &self,
+        instance_axis: Axis,
+        k: usize,
+        initial_centroids: impl InitialCentroids<A>,
+        stop_condition: impl StopCondition<A>,
+    ) -> (Array2<A>, A);
+}
+
+impl<'a, S, A> KMeans<A> for ArrayBase<S, Ix2>
+where
+    S: Data<Elem = A>,
+    A: NdFloat + Sum,
+    usize: AsPrimitive<A>,
+{
+    fn k_means(
+        &self,
+        instance_axis: Axis,
+        k: usize,
+        mut initial_centroids: impl InitialCentroids<A>,
+        stop_condition: impl StopCondition<A>,
+    ) -> (Array2<A>, A) {
+        assert!(
+            k <= self.len_of(instance_axis) && k != 0,
+            "k cannot be larger than the number of data points or zero"
+        );
+
+        let mut centroids = initial_centroids.initial_centroids(self.view(), instance_axis, k);
+        let loss = self.kmeans_with_centroids(instance_axis, centroids.view_mut(), stop_condition);
+        (centroids, loss)
+    }
+}
+
+/// Trait for k-means clustering with an initial set of centroids.
+///
+/// Performs k-means clustering on the matrix of instances along
+/// `instance_axis` using the given `centroids`.
+///
+/// Returns the mean squared error.
+pub trait KMeansWithCentroids<A> {
+    fn kmeans_with_centroids(
+        &self,
+        instance_axis: Axis,
+        centroids: ArrayViewMut2<A>,
+        stop_condition: impl StopCondition<A>,
+    ) -> A;
+}
+
+impl<S, A> KMeansWithCentroids<A> for ArrayBase<S, Ix2>
+where
+    S: Data<Elem = A>,
+    A: NdFloat + Sum,
+    usize: AsPrimitive<A>,
+{
+    fn kmeans_with_centroids(
+        &self,
+        instance_axis: Axis,
+        mut centroids: ArrayViewMut2<A>,
+        mut stop_condition: impl StopCondition<A>,
+    ) -> A {
+        assert!(
+            centroids.rows() > 0,
+            "Cannot cluster instances with zero centroids."
+        );
+        assert_eq!(
+            centroids.cols(),
+            self.len_of(Axis(instance_axis.index() ^ 1)),
+            "Centroid and instance lengths differ."
+        );
+
+        for iter in 0.. {
+            let loss = self.kmeans_iteration(instance_axis, centroids.view_mut());
+            if stop_condition.should_stop(iter + 1, loss) {
+                return loss;
+            }
+        }
+
+        unreachable!()
+    }
+}
+
+/// Trait for types that implement a single k-means step.
+pub trait KMeansIteration<A> {
+    /// Perform a single iteration of k-means clustering.
+    ///
+    /// Performs a single iteration of k-means clustering on the
+    /// matrix of instances along`instance_axis` using the given
+    /// `centroids`.
+    ///
+    /// Returns the mean squared error.
+    fn kmeans_iteration(&self, instance_axis: Axis, centroids: ArrayViewMut2<A>) -> A;
+}
+
+impl<S, A> KMeansIteration<A> for ArrayBase<S, Ix2>
+where
+    S: Data<Elem = A>,
+    A: NdFloat + Sum,
+    usize: AsPrimitive<A>,
+{
+    fn kmeans_iteration(&self, instance_axis: Axis, mut centroids: ArrayViewMut2<A>) -> A {
+        assert!(
+            centroids.rows() > 0,
+            "Cannot cluster instances with zero centroids."
+        );
+        assert_eq!(
+            centroids.cols(),
+            self.len_of(Axis(instance_axis.index() ^ 1)),
+            "Centroid and instance lengths differ."
+        );
+
+        let assignments = cluster_assignments(centroids.view(), self.view(), instance_axis);
+        update_centroids(
+            centroids.view_mut(),
+            self.view(),
+            instance_axis,
+            &assignments,
+        );
+        mean_squared_error(centroids.view(), self.view(), instance_axis, &assignments)
+    }
+}
+
+fn mean_squared_error<A>(
+    centroids: ArrayView2<A>,
+    instances: ArrayView2<A>,
+    instance_axis: Axis,
+    assignments: &[usize],
+) -> A
+where
+    A: NdFloat + Sum,
+    usize: AsPrimitive<A>,
+{
+    // Get the centroids representing the instances. Future: do not
+    // construct an explicit matrix. Though I guess that it is
+    // potentially optimized away due to the fold below.
+    let mut errors = centroids.select(Axis(0), assignments);
+
+    // Absolute errors.
+    match instance_axis {
+        Axis(0) => errors -= &instances,
+        Axis(1) => errors -= &instances.t(),
+        _ => unreachable!(),
+    }
+
+    // Summed squared error
+    let sse = errors.into_iter().map(|&v| v * v).sum::<A>();
+
+    sse / instances.len().as_()
+}
+
 #[cfg(test)]
 mod tests {
-    use ndarray::{array, Axis};
+    use ndarray::{array, stack, Array2, ArrayBase, Axis, Data, Ix2};
+    use ndarray_rand::RandomExt;
+    use rand::distributions::Normal;
+    use rand::{Rng, SeedableRng};
+    use rand_xorshift::XorShiftRng;
 
-    use super::{cluster_assignments, update_centroids};
+    use super::{
+        cluster_assignments, mean_squared_error, update_centroids, KMeans, NIterationsCondition,
+        RandomInstanceCentroids,
+    };
+
+    const SEED: [u8; 16] = [
+        0xd3, 0x68, 0x34, 0x05, 0xf2, 0x6e, 0xa4, 0x45, 0x2b, 0x2b, 0xea, 0x1f, 0x08, 0xce, 0x88,
+        0xf6,
+    ];
 
     #[test]
     fn correct_cluster_assignments() {
@@ -222,5 +393,81 @@ mod tests {
             centroids,
             array![[0.5, 0.5, 0.], [-1.5, -1., 0.], [0., 0., 1.5]]
         );
+    }
+
+    fn gaussian_spheres<S>(centers: ArrayBase<S, Ix2>, mut rng: &mut impl Rng) -> Array2<f64>
+    where
+        S: Data<Elem = f64>,
+    {
+        let n_samples = 11;
+
+        let mut spheres = Vec::new();
+        for center in centers.outer_iter() {
+            let mut sphere =
+                Array2::random_using((n_samples, center.len()), Normal::new(0., 0.01), &mut rng);
+            sphere += &center;
+            spheres.push(sphere);
+        }
+
+        let sphere_views: Vec<_> = spheres.iter().map(|s| s.view()).collect();
+
+        stack(Axis(0), &sphere_views).expect("Shapes of gaussian spheres do not match")
+    }
+
+    #[test]
+    fn k_means_3() {
+        let mut rng = XorShiftRng::from_seed(SEED);
+
+        let gaussians = gaussian_spheres(array![[0., 0.], [1., 0.], [1., 1.]], &mut rng);
+
+        let random_centroids = RandomInstanceCentroids::new(rng);
+        let mut centroids: Vec<_> = gaussians
+            .k_means(Axis(0), 3, random_centroids, NIterationsCondition(10))
+            .0
+            // Round centroids to nearest integer.
+            .map(|v| v.round() as isize)
+            // Convert rows to Vec.
+            .outer_iter()
+            .map(|r| r.to_vec())
+            .collect();
+        centroids.sort();
+
+        // k-means can find a worse local minimum, but we are using a fixed seed.
+        assert_eq!(centroids, [[0, 0], [1, 0], [1, 1]]);
+    }
+
+    #[test]
+    fn k_means_3_axis1() {
+        let mut rng = XorShiftRng::from_seed(SEED);
+
+        let gaussians = gaussian_spheres(array![[0., 0.], [1., 0.], [1., 1.]], &mut rng);
+
+        let random_centroids = RandomInstanceCentroids::new(rng);
+        let mut centroids: Vec<_> = gaussians
+            .t()
+            .k_means(Axis(1), 3, random_centroids, NIterationsCondition(10))
+            .0
+            // Round centroids to nearest integer.
+            .map(|v| v.round() as isize)
+            // Convert rows to Vec.
+            .outer_iter()
+            .map(|r| r.to_vec())
+            .collect();
+        centroids.sort();
+
+        // k-means can find a worse local minimum, but we are using a fixed seed.
+        assert_eq!(centroids, [[0, 0], [1, 0], [1, 1]]);
+    }
+
+    #[test]
+    fn correct_mean_squared_error() {
+        let centroids = array![[-1., 2., 0.], [0., -1., 1.]];
+        let instances = array![[-1., 1., 1.], [0., 1., 0.]];
+
+        let mse = mean_squared_error(centroids.view(), instances.view(), Axis(0), &[1, 0]);
+        assert_eq!(mse, 7. / 6.);
+
+        let mse = mean_squared_error(centroids.view(), instances.view().t(), Axis(1), &[1, 0]);
+        assert_eq!(mse, 7. / 6.);
     }
 }
