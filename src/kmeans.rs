@@ -3,7 +3,9 @@
 use std::collections::HashSet;
 use std::iter::Sum;
 
-use ndarray::{Array1, Array2, ArrayBase, ArrayView2, ArrayViewMut2, Axis, Data, Ix2, NdFloat};
+use ndarray::{
+    Array1, Array2, ArrayBase, ArrayView2, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat,
+};
 use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 use rand::distributions::{Distribution, Uniform};
@@ -56,6 +58,12 @@ where
     where
         S: Data<Elem = A>,
     {
+        assert!(k > 0, "Cannot pick 0 random centroids");
+        assert!(
+            k < data.len_of(instance_axis),
+            "Cannot pick more centroids than instances"
+        );
+
         // Use random instances as centroids.
         let uniform = Uniform::new(0, data.len_of(instance_axis));
         let mut initial_indices = HashSet::new();
@@ -89,20 +97,42 @@ impl<A> StopCondition<A> for NIterationsCondition {
     }
 }
 
+/// Find nearest cluster centroid for an instance.
+///
+/// Find nearest centroid for each instance along `instance_axis` of
+/// `instances`. Returns for each instance the index of the nearest
+/// cluster centroid.
+pub(crate) fn cluster_assignment<A, S>(
+    centroids: ArrayView2<A>,
+    instance: ArrayBase<S, Ix1>,
+) -> usize
+where
+    A: NdFloat + Sum,
+    S: Data<Elem = A>,
+{
+    instance
+        .squared_euclidean_distance(centroids)
+        .iter()
+        .enumerate()
+        .min_by_key(|v| OrderedFloat(*v.1))
+        .unwrap()
+        .0
+}
+
 /// Find nearest cluster centroid for each instance.
 ///
 /// Find nearest centroid for each instance along `instance_axis` of
 /// `instances`. Returns for each instance the index of the nearest
 /// cluster centroid.
-fn cluster_assignments<A>(
+pub(crate) fn cluster_assignments<A>(
     centroids: ArrayView2<A>,
     instances: ArrayView2<A>,
     instance_axis: Axis,
-) -> Vec<usize>
+) -> Array1<usize>
 where
     A: NdFloat + Sum,
 {
-    let mut assignments = Vec::with_capacity(instances.len_of(instance_axis));
+    let mut assignments = Array1::zeros(instances.len_of(instance_axis));
 
     let dists = if instance_axis == Axis(0) {
         instances.squared_euclidean_distance(centroids)
@@ -110,15 +140,13 @@ where
         instances.t().squared_euclidean_distance(centroids)
     };
 
-    for inst_dists in dists.outer_iter() {
-        assignments.push(
-            inst_dists
-                .iter()
-                .enumerate()
-                .min_by_key(|v| OrderedFloat(*v.1))
-                .unwrap()
-                .0,
-        );
+    for (assignment, inst_dists) in assignments.iter_mut().zip(dists.outer_iter()) {
+        *assignment = inst_dists
+            .iter()
+            .enumerate()
+            .min_by_key(|v| OrderedFloat(*v.1))
+            .unwrap()
+            .0;
     }
 
     assignments
@@ -129,13 +157,14 @@ where
 /// `instance_axis` is the instance axis of `data`. The centroids
 /// are row-based. `assignments` contains an assignment for each
 /// data point.
-fn update_centroids<A>(
+fn update_centroids<A, S>(
     mut centroids: ArrayViewMut2<A>,
     data: ArrayView2<A>,
     instance_axis: Axis,
-    assignments: &[usize],
+    assignments: ArrayBase<S, Ix1>,
 ) where
     A: NdFloat,
+    S: Data<Elem = usize>,
 {
     assert_eq!(
         assignments.len(),
@@ -147,7 +176,7 @@ fn update_centroids<A>(
 
     let mut centroid_counts = Array1::zeros(centroids.rows());
 
-    for (instance, assignment) in data.axis_iter(instance_axis).zip(assignments) {
+    for (instance, assignment) in data.axis_iter(instance_axis).zip(assignments.iter()) {
         let mut centroid = centroids.index_axis_mut(Axis(0), *assignment);
         centroid += &instance;
         centroid_counts[*assignment] += A::one();
@@ -286,26 +315,30 @@ where
             centroids.view_mut(),
             self.view(),
             instance_axis,
-            &assignments,
+            assignments.view(),
         );
-        mean_squared_error(centroids.view(), self.view(), instance_axis, &assignments)
+        mean_squared_error(centroids.view(), self.view(), instance_axis, assignments)
     }
 }
 
-fn mean_squared_error<A>(
+fn mean_squared_error<A, S>(
     centroids: ArrayView2<A>,
     instances: ArrayView2<A>,
     instance_axis: Axis,
-    assignments: &[usize],
+    assignments: ArrayBase<S, Ix1>,
 ) -> A
 where
     A: NdFloat + Sum,
     usize: AsPrimitive<A>,
+    S: Data<Elem = usize>,
 {
     // Get the centroids representing the instances. Future: do not
     // construct an explicit matrix. Though I guess that it is
     // potentially optimized away due to the fold below.
-    let mut errors = centroids.select(Axis(0), assignments);
+    let mut errors = centroids.select(
+        Axis(0),
+        assignments.as_slice().expect("Non-contiguous vector"),
+    );
 
     // Absolute errors.
     match instance_axis {
@@ -353,11 +386,11 @@ mod tests {
 
         // Test instances along axis 0.
         let assignments = cluster_assignments(centroids.view(), instances.view(), Axis(0));
-        assert_eq!(assignments, &[0, 2, 0, 2, 1, 3, 0]);
+        assert_eq!(assignments, array![0, 2, 0, 2, 1, 3, 0]);
 
         // Test instances along axis 1.
         let assignments = cluster_assignments(centroids.view(), instances.t(), Axis(1));
-        assert_eq!(assignments, &[0, 2, 0, 2, 1, 3, 0]);
+        assert_eq!(assignments, array![0, 2, 0, 2, 1, 3, 0]);
     }
 
     #[test]
@@ -371,14 +404,14 @@ mod tests {
             [0., 0., 1.],
             [0., 0., 2.],
         ];
-        let assignments = vec![1, 0, 1, 0, 2, 2];
+        let assignments = array![1, 0, 1, 0, 2, 2];
 
         // Test instances along axis 0.
         update_centroids(
             centroids.view_mut(),
             instances.view(),
             Axis(0),
-            &assignments,
+            assignments.view(),
         );
 
         assert_eq!(
@@ -387,7 +420,7 @@ mod tests {
         );
 
         // Test instances along axis 1.
-        update_centroids(centroids.view_mut(), instances.t(), Axis(1), &assignments);
+        update_centroids(centroids.view_mut(), instances.t(), Axis(1), assignments);
 
         assert_eq!(
             centroids,
@@ -464,10 +497,15 @@ mod tests {
         let centroids = array![[-1., 2., 0.], [0., -1., 1.]];
         let instances = array![[-1., 1., 1.], [0., 1., 0.]];
 
-        let mse = mean_squared_error(centroids.view(), instances.view(), Axis(0), &[1, 0]);
+        let mse = mean_squared_error(centroids.view(), instances.view(), Axis(0), array![1, 0]);
         assert_eq!(mse, 7. / 6.);
 
-        let mse = mean_squared_error(centroids.view(), instances.view().t(), Axis(1), &[1, 0]);
+        let mse = mean_squared_error(
+            centroids.view(),
+            instances.view().t(),
+            Axis(1),
+            array![1, 0],
+        );
         assert_eq!(mse, 7. / 6.);
     }
 }
