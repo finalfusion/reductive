@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 ndarray = "0.12"
+ndarray-linalg = "0.10"
 ndarray-parallel = "0.9"
 num-traits = "0.2"
 ordered-float = "1"
@@ -17,3 +18,10 @@ rayon = "1"
 [dev-dependencies]
 ndarray-rand = "0.9"
 rand = "0.6"
+
+[features]
+default    = []
+accelerate = ["ndarray-linalg/accelerate"]
+intel-mkl  = ["ndarray-linalg/intel-mkl"]
+netlib     = ["ndarray-linalg/netlib"]
+openblas   = ["ndarray-linalg/openblas"]

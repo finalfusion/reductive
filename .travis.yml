@@ -3,6 +3,16 @@ rust:
   - stable
   - beta
   - nightly
+script:
+  - cargo build --verbose --features openblas
+  - cargo test --verbose --features openblas
 matrix:
   allow_failures:
     - rust: nightly
+sudo: required
+dist: trusty
+addons:
+  apt:
+    packages:
+      - libopenblas-dev
+      - gfortran
