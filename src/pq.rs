@@ -4,9 +4,12 @@ use std::iter;
 use std::iter::Sum;
 
 use log::info;
-use ndarray::{s, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, NdFloat};
+use ndarray::{
+    s, Array1, Array2, ArrayBase, ArrayView2, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat,
+};
 use ndarray_linalg::eigh::Eigh;
 use ndarray_linalg::lapack_traits::UPLO;
+use ndarray_linalg::svd::SVD;
 use ndarray_linalg::types::Scalar;
 use ndarray_parallel::prelude::*;
 use num_traits::AsPrimitive;
@@ -16,8 +19,8 @@ use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 
 use crate::kmeans::{
-    cluster_assignment, cluster_assignments, InitialCentroids, KMeansWithCentroids,
-    NIterationsCondition, RandomInstanceCentroids,
+    cluster_assignment, cluster_assignments, InitialCentroids, KMeansIteration,
+    KMeansWithCentroids, NIterationsCondition, RandomInstanceCentroids,
 };
 use crate::linalg::Covariance;
 
@@ -60,8 +63,10 @@ pub trait ReconstructVector<A> {
 ///
 /// This quantizer learns a orthonormal matrix that rotates the input
 /// space in order to balance variances over subquantizers. The
-/// optimization procedure assumes that the variables have a Gaussia
-/// distribution.
+/// optimization procedure assumes that the variables have a Gaussian
+/// distribution. The `OPQ` quantizer provides a non-parametric,
+/// albeit slower to train implementation of optimized product
+/// quantization.
 pub struct GaussianOPQ<A> {
     projection: Array2<A>,
     pq: PQ<A>,
@@ -167,6 +172,192 @@ where
 }
 
 impl<A> ReconstructVector<A> for GaussianOPQ<A>
+where
+    A: NdFloat + Sum,
+{
+    fn reconstruct_batch<S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
+    where
+        S: Data<Elem = usize>,
+    {
+        self.pq
+            .reconstruct_batch(quantized)
+            .dot(&self.projection.t())
+    }
+
+    fn reconstruct_vector<S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
+    where
+        S: Data<Elem = usize>,
+    {
+        self.pq
+            .reconstruct_vector(quantized)
+            .dot(&self.projection.t())
+    }
+}
+
+/// Optimized product quantizer (Ge et al., 2013).
+///
+/// A product quantizer is a vector quantizer that slices a vector and
+/// assigns to the *i*-th slice the index of the nearest centroid of the
+/// *i*-th subquantizer. Vector reconstruction consists of concatenating
+/// the centroids that represent the slices.
+///
+/// This quantizer learns a orthonormal matrix that rotates the input
+/// space in order to balance variances over subquantizers. If the
+/// variables have a Gaussian distribution, `GaussianOPQ` is faster to
+/// train than this quantizer.
+pub struct OPQ<A> {
+    projection: Array2<A>,
+    pq: PQ<A>,
+}
+
+impl<A> OPQ<A>
+where
+    A: NdFloat + Scalar + Sum,
+    A::Real: NdFloat,
+    usize: AsPrimitive<A>,
+{
+    /// Train a product quantizer with the xorshift PRNG.
+    ///
+    /// Train a product quantizer with `n_subquantizers` subquantizers
+    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
+    /// centroids.  The subquantizers are trained with `n_iterations`
+    /// k-means iterations.
+    pub fn train<S>(
+        n_subquantizers: usize,
+        n_subquantizer_bits: u32,
+        n_iterations: usize,
+        instances: ArrayBase<S, Ix2>,
+    ) -> Self
+    where
+        S: Sync + Data<Elem = A>,
+    {
+        let mut rng = XorShiftRng::from_entropy();
+        Self::train_using(
+            n_subquantizers,
+            n_subquantizer_bits,
+            n_iterations,
+            instances,
+            &mut rng,
+        )
+    }
+
+    /// Train a product quantizer.
+    ///
+    /// Train a product quantizer with `n_subquantizers` subquantizers
+    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
+    /// centroids.  The subquantizers are trained with `n_iterations`
+    /// k-means iterations.
+    ///
+    /// `rng` is used for picking the initial cluster centroids of
+    /// each subquantizer.
+    pub fn train_using<S>(
+        n_subquantizers: usize,
+        n_subquantizer_bits: u32,
+        n_iterations: usize,
+        instances: ArrayBase<S, Ix2>,
+        rng: &mut impl Rng,
+    ) -> Self
+    where
+        S: Sync + Data<Elem = A>,
+    {
+        PQ::check_quantizer_invariants(
+            n_subquantizers,
+            n_subquantizer_bits,
+            n_iterations,
+            1,
+            instances.view(),
+        );
+
+        // Find initial projection matrix, which will be refined iteratively.
+        let mut projection = create_projection_matrix(instances.view(), n_subquantizers);
+        let rx = instances.dot(&projection);
+
+        // Pick centroids.
+        let mut centroids = initial_centroids(
+            n_subquantizers,
+            2usize.pow(n_subquantizer_bits),
+            rx.view(),
+            rng,
+        );
+
+        // Iteratively refine the clusters and the projection matrix.
+        for i in 0..n_iterations {
+            info!("Train iteration {}", i);
+            Self::train_iteration(projection.view_mut(), &mut centroids, instances.view());
+        }
+
+        OPQ {
+            pq: PQ {
+                quantizers: centroids,
+                quantizer_len: instances.cols(),
+            },
+            projection,
+        }
+    }
+
+    fn train_iteration(
+        mut projection: ArrayViewMut2<A>,
+        centroids: &mut [Array2<A>],
+        instances: ArrayView2<A>,
+    ) {
+        info!("Updating subquantizers");
+
+        // Perform one iteration of cluster updates, using regular k-means.
+        let rx = instances.dot(&projection);
+        Self::update_subquantizers(centroids, rx.view());
+
+        info!("Updating projection matrix");
+
+        // Do a quantization -> reconstruction roundtrip. We recycle the
+        // projection matrix to avoid (re)allocations.
+        let quantized = quantize_batch(&centroids, instances.cols(), rx.view());
+        let mut reconstructed = rx;
+        reconstruct_batch_into(centroids, quantized, reconstructed.view_mut());
+
+        // Find the new projection matrix using the instances and their
+        // (projected) reconstructions. See (the text below) Eq 7 in
+        // Ge et al., 2013.
+        let (u, _, vt) = instances.t().dot(&reconstructed).svd(true, true).unwrap();
+        projection.assign(&u.unwrap().dot(&vt.unwrap()));
+    }
+
+    fn update_subquantizers<S>(centroids: &mut [Array2<A>], instances: ArrayBase<S, Ix2>)
+    where
+        S: Sync + Data<Elem = A>,
+    {
+        centroids
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(sq, sq_centroids)| {
+                let offset = sq * sq_centroids.cols();
+                let sq_instances = instances.slice(s![.., offset..offset + sq_centroids.cols()]);
+                sq_instances.kmeans_iteration(Axis(0), sq_centroids.view_mut());
+            });
+    }
+}
+
+impl<A> QuantizeVector<A> for OPQ<A>
+where
+    A: NdFloat + Sum,
+{
+    fn quantize_batch<S>(&self, x: ArrayBase<S, Ix2>) -> Array2<usize>
+    where
+        S: Data<Elem = A>,
+    {
+        let rx = x.dot(&self.projection);
+        self.pq.quantize_batch(rx)
+    }
+
+    fn quantize_vector<S>(&self, x: ArrayBase<S, Ix1>) -> Array1<usize>
+    where
+        S: Data<Elem = A>,
+    {
+        let rx = x.dot(&self.projection);
+        self.pq.quantize_vector(rx)
+    }
+}
+
+impl<A> ReconstructVector<A> for OPQ<A>
 where
     A: NdFloat + Sum,
 {
@@ -598,22 +789,33 @@ where
     A: NdFloat,
     S: Data<Elem = usize>,
 {
+    let mut reconstructions =
+        Array2::zeros((quantized.rows(), quantizers.len() * quantizers[0].cols()));
+
+    reconstruct_batch_into(quantizers, quantized, reconstructions.view_mut());
+
+    reconstructions
+}
+
+fn reconstruct_batch_into<A, S>(
+    quantizers: &[Array2<A>],
+    quantized: ArrayBase<S, Ix2>,
+    mut reconstructions: ArrayViewMut2<A>,
+) where
+    A: NdFloat,
+    S: Data<Elem = usize>,
+{
     assert_eq!(
         quantizers.len(),
         quantized.cols(),
         "Quantization length does not match number of subquantizers"
     );
 
-    let mut reconstructions =
-        Array2::zeros((quantized.rows(), quantizers.len() * quantizers[0].cols()));
-
     for (quantized, mut reconstruction) in
         quantized.outer_iter().zip(reconstructions.outer_iter_mut())
     {
         reconstruction.assign(&reconstruct(quantizers, quantized));
     }
-
-    reconstructions
 }
 
 #[cfg(test)]
