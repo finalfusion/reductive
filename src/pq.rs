@@ -24,6 +24,64 @@ use crate::kmeans::{
 };
 use crate::linalg::Covariance;
 
+/// Training triat for product quantizers.
+///
+/// This traits specifies the training functions for product
+/// quantizers.
+pub trait TrainPQ<A>
+where
+    Self: Sized,
+{
+    /// Train a product quantizer with the xorshift PRNG.
+    ///
+    /// Train a product quantizer with `n_subquantizers` subquantizers
+    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
+    /// centroids.  The subquantizers are trained with `n_iterations`
+    /// k-means iterations. Each subquantizer is trained `n_attempts`
+    /// times, where the best clustering is used.
+    fn train_pq<S>(
+        n_subquantizers: usize,
+        n_subquantizer_bits: u32,
+        n_iterations: usize,
+        n_attempts: usize,
+        instances: ArrayBase<S, Ix2>,
+    ) -> Self
+    where
+        S: Sync + Data<Elem = A>,
+    {
+        let mut rng = XorShiftRng::from_entropy();
+        Self::train_pq_using(
+            n_subquantizers,
+            n_subquantizer_bits,
+            n_iterations,
+            n_attempts,
+            instances,
+            &mut rng,
+        )
+    }
+
+    /// Train a product quantizer.
+    ///
+    /// Train a product quantizer with `n_subquantizers` subquantizers
+    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
+    /// centroids.  The subquantizers are trained with `n_iterations`
+    /// k-means iterations. Each subquantizer is trained `n_attempts`
+    /// times, where the best clustering is used.
+    ///
+    /// `rng` is used for picking the initial cluster centroids of
+    /// each subquantizer.
+    fn train_pq_using<S>(
+        n_subquantizers: usize,
+        n_subquantizer_bits: u32,
+        n_iterations: usize,
+        n_attempts: usize,
+        instances: ArrayBase<S, Ix2>,
+        rng: &mut impl Rng,
+    ) -> Self
+    where
+        S: Sync + Data<Elem = A>;
+}
+
 /// Vector quantization.
 pub trait QuantizeVector<A> {
     /// Quantize a batch of vectors.
@@ -72,51 +130,13 @@ pub struct GaussianOPQ<A> {
     pq: PQ<A>,
 }
 
-impl<A> GaussianOPQ<A>
+impl<A> TrainPQ<A> for GaussianOPQ<A>
 where
     A: NdFloat + Scalar + Sum,
     A::Real: NdFloat,
     usize: AsPrimitive<A>,
 {
-    /// Train a product quantizer with the xorshift PRNG.
-    ///
-    /// Train a product quantizer with `n_subquantizers` subquantizers
-    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
-    /// centroids.  The subquantizers are trained with `n_iterations`
-    /// k-means iterations. Each subquantizer is trained `n_attempts`
-    /// times, where the best clustering is used.
-    pub fn train<S>(
-        n_subquantizers: usize,
-        n_subquantizer_bits: u32,
-        n_iterations: usize,
-        n_attempts: usize,
-        instances: ArrayBase<S, Ix2>,
-    ) -> Self
-    where
-        S: Sync + Data<Elem = A>,
-    {
-        let mut rng = XorShiftRng::from_entropy();
-        Self::train_using(
-            n_subquantizers,
-            n_subquantizer_bits,
-            n_iterations,
-            n_attempts,
-            instances,
-            &mut rng,
-        )
-    }
-
-    /// Train a product quantizer.
-    ///
-    /// Train a product quantizer with `n_subquantizers` subquantizers
-    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
-    /// centroids.  The subquantizers are trained with `n_iterations`
-    /// k-means iterations. Each subquantizer is trained `n_attempts`
-    /// times, where the best clustering is used.
-    ///
-    /// `rng` is used for picking the initial cluster centroids of
-    /// each subquantizer.
-    pub fn train_using<S>(
+    fn train_pq_using<S>(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
         n_iterations: usize,
@@ -137,7 +157,7 @@ where
 
         let projection = create_projection_matrix(instances.view(), n_subquantizers);
         let rx = instances.dot(&projection);
-        let pq = PQ::train_using(
+        let pq = PQ::train_pq_using(
             n_subquantizers,
             n_subquantizer_bits,
             n_iterations,
@@ -205,55 +225,26 @@ where
 /// space in order to balance variances over subquantizers. If the
 /// variables have a Gaussian distribution, `GaussianOPQ` is faster to
 /// train than this quantizer.
+///
+/// This quantizer always trains the quantizer in one attempt, so the
+/// `n_attempts` argument of the `TrainPQ` constructors currently has
+/// no effect.
 pub struct OPQ<A> {
     projection: Array2<A>,
     pq: PQ<A>,
 }
 
-impl<A> OPQ<A>
+impl<A> TrainPQ<A> for OPQ<A>
 where
     A: NdFloat + Scalar + Sum,
     A::Real: NdFloat,
     usize: AsPrimitive<A>,
 {
-    /// Train a product quantizer with the xorshift PRNG.
-    ///
-    /// Train a product quantizer with `n_subquantizers` subquantizers
-    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
-    /// centroids.  The subquantizers are trained with `n_iterations`
-    /// k-means iterations.
-    pub fn train<S>(
+    fn train_pq_using<S>(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
         n_iterations: usize,
-        instances: ArrayBase<S, Ix2>,
-    ) -> Self
-    where
-        S: Sync + Data<Elem = A>,
-    {
-        let mut rng = XorShiftRng::from_entropy();
-        Self::train_using(
-            n_subquantizers,
-            n_subquantizer_bits,
-            n_iterations,
-            instances,
-            &mut rng,
-        )
-    }
-
-    /// Train a product quantizer.
-    ///
-    /// Train a product quantizer with `n_subquantizers` subquantizers
-    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
-    /// centroids.  The subquantizers are trained with `n_iterations`
-    /// k-means iterations.
-    ///
-    /// `rng` is used for picking the initial cluster centroids of
-    /// each subquantizer.
-    pub fn train_using<S>(
-        n_subquantizers: usize,
-        n_subquantizer_bits: u32,
-        n_iterations: usize,
+        _n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         rng: &mut impl Rng,
     ) -> Self
@@ -294,7 +285,14 @@ where
             projection,
         }
     }
+}
 
+impl<A> OPQ<A>
+where
+    A: NdFloat + Scalar + Sum,
+    A::Real: NdFloat,
+    usize: AsPrimitive<A>,
+{
     fn train_iteration(
         mut projection: ArrayViewMut2<A>,
         centroids: &mut [Array2<A>],
@@ -396,84 +394,6 @@ where
     A: NdFloat + Sum,
     usize: AsPrimitive<A>,
 {
-    /// Train a product quantizer with the xorshift PRNG.
-    ///
-    /// Train a product quantizer with `n_subquantizers` subquantizers
-    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
-    /// centroids.  The subquantizers are trained with `n_iterations`
-    /// k-means iterations. Each subquantizer is trained `n_attempts`
-    /// times, where the best clustering is used.
-    pub fn train<S>(
-        n_subquantizers: usize,
-        n_subquantizer_bits: u32,
-        n_iterations: usize,
-        n_attempts: usize,
-        instances: ArrayBase<S, Ix2>,
-    ) -> Self
-    where
-        S: Sync + Data<Elem = A>,
-    {
-        let mut rng = XorShiftRng::from_entropy();
-        Self::train_using(
-            n_subquantizers,
-            n_subquantizer_bits,
-            n_iterations,
-            n_attempts,
-            instances,
-            &mut rng,
-        )
-    }
-
-    /// Train a product quantizer.
-    ///
-    /// Train a product quantizer with `n_subquantizers` subquantizers
-    /// on `instances`. Each subquantizer has 2^`quantizer_bits`
-    /// centroids.  The subquantizers are trained with `n_iterations`
-    /// k-means iterations. Each subquantizer is trained `n_attempts`
-    /// times, where the best clustering is used.
-    ///
-    /// `rng` is used for picking the initial cluster centroids of
-    /// each subquantizer.
-    pub fn train_using<S>(
-        n_subquantizers: usize,
-        n_subquantizer_bits: u32,
-        n_iterations: usize,
-        n_attempts: usize,
-        instances: ArrayBase<S, Ix2>,
-        rng: &mut impl Rng,
-    ) -> Self
-    where
-        S: Sync + Data<Elem = A>,
-    {
-        Self::check_quantizer_invariants(
-            n_subquantizers,
-            n_subquantizer_bits,
-            n_iterations,
-            n_attempts,
-            instances.view(),
-        );
-
-        let quantizers = initial_centroids(
-            n_subquantizers,
-            2usize.pow(n_subquantizer_bits),
-            instances.view(),
-            rng,
-        );
-
-        let quantizers = quantizers
-            .into_par_iter()
-            .enumerate()
-            .map(|(idx, quantizer)| {
-                Self::train_subquantizer(idx, quantizer, n_iterations, n_attempts, instances.view())
-            })
-            .collect();
-
-        PQ {
-            quantizer_len: instances.cols(),
-            quantizers,
-        }
-    }
-
     fn check_quantizer_invariants(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
@@ -544,6 +464,52 @@ where
     /// Get the subquantizer centroids.
     pub fn subquantizers(&self) -> &[Array2<A>] {
         &self.quantizers
+    }
+}
+
+impl<A> TrainPQ<A> for PQ<A>
+where
+    A: NdFloat + Sum,
+    usize: AsPrimitive<A>,
+{
+    fn train_pq_using<S>(
+        n_subquantizers: usize,
+        n_subquantizer_bits: u32,
+        n_iterations: usize,
+        n_attempts: usize,
+        instances: ArrayBase<S, Ix2>,
+        rng: &mut impl Rng,
+    ) -> Self
+    where
+        S: Sync + Data<Elem = A>,
+    {
+        Self::check_quantizer_invariants(
+            n_subquantizers,
+            n_subquantizer_bits,
+            n_iterations,
+            n_attempts,
+            instances.view(),
+        );
+
+        let quantizers = initial_centroids(
+            n_subquantizers,
+            2usize.pow(n_subquantizer_bits),
+            instances.view(),
+            rng,
+        );
+
+        let quantizers = quantizers
+            .into_par_iter()
+            .enumerate()
+            .map(|(idx, quantizer)| {
+                Self::train_subquantizer(idx, quantizer, n_iterations, n_attempts, instances.view())
+            })
+            .collect();
+
+        PQ {
+            quantizer_len: instances.cols(),
+            quantizers,
+        }
     }
 }
 
