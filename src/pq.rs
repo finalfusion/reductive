@@ -7,10 +7,8 @@ use log::info;
 use ndarray::{
     s, Array1, Array2, ArrayBase, ArrayView2, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat,
 };
-use ndarray_linalg::eigh::Eigh;
-use ndarray_linalg::lapack_traits::UPLO;
-use ndarray_linalg::svd::SVD;
-use ndarray_linalg::types::Scalar;
+#[cfg(feature = "opq-train")]
+use ndarray_linalg::{eigh::Eigh, lapack_traits::UPLO, svd::SVD, types::Scalar};
 use ndarray_parallel::prelude::*;
 use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
@@ -18,10 +16,13 @@ use rand::{FromEntropy, Rng};
 use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 
+#[cfg(feature = "opq-train")]
+use crate::kmeans::KMeansIteration;
 use crate::kmeans::{
-    cluster_assignment, cluster_assignments, InitialCentroids, KMeansIteration,
-    KMeansWithCentroids, NIterationsCondition, RandomInstanceCentroids,
+    cluster_assignment, cluster_assignments, InitialCentroids, KMeansWithCentroids,
+    NIterationsCondition, RandomInstanceCentroids,
 };
+#[cfg(feature = "opq-train")]
 use crate::linalg::Covariance;
 
 /// Training triat for product quantizers.
@@ -130,6 +131,7 @@ pub struct GaussianOPQ<A> {
     pq: PQ<A>,
 }
 
+#[cfg(feature = "opq-train")]
 impl<A> TrainPQ<A> for GaussianOPQ<A>
 where
     A: NdFloat + Scalar + Sum,
@@ -234,6 +236,7 @@ pub struct OPQ<A> {
     pq: PQ<A>,
 }
 
+#[cfg(feature = "opq-train")]
 impl<A> TrainPQ<A> for OPQ<A>
 where
     A: NdFloat + Scalar + Sum,
@@ -287,6 +290,7 @@ where
     }
 }
 
+#[cfg(feature = "opq-train")]
 impl<A> OPQ<A>
 where
     A: NdFloat + Scalar + Sum,
@@ -551,6 +555,7 @@ where
     }
 }
 
+#[cfg(feature = "opq-train")]
 fn bucket_eigenvalues<S, A>(eigenvalues: ArrayBase<S, Ix1>, n_buckets: usize) -> Vec<Vec<usize>>
 where
     S: Data<Elem = A>,
@@ -614,6 +619,7 @@ where
     assignments
 }
 
+#[cfg(feature = "opq-train")]
 fn create_projection_matrix<A>(instances: ArrayView2<A>, n_subquantizers: usize) -> Array2<A>
 where
     A: NdFloat + Scalar,
@@ -825,6 +831,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "opq-train")]
     fn bucket_eigenvalues() {
         // Some fake eigenvalues.
         let eigenvalues = array![0.2, 0.6, 0.4, 0.1, 0.3, 0.5];
@@ -835,6 +842,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "opq-train")]
     fn bucket_large_eigenvalues() {
         let eigenvalues = array![11174., 23450., 30835., 1557., 32425., 5154.];
         assert_eq!(
@@ -845,6 +853,7 @@ mod tests {
 
     #[test]
     #[should_panic]
+    #[cfg(feature = "opq-train")]
     fn bucket_eigenvalues_uneven() {
         // Some fake eigenvalues.
         let eigenvalues = array![0.2, 0.6, 0.4, 0.1, 0.3, 0.5];

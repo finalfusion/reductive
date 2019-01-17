@@ -4,8 +4,10 @@ rust:
   - beta
   - nightly
 script:
-  - cargo build --verbose --features openblas
-  - cargo test --verbose --features openblas
+  - cargo build --verbose
+  - cargo test --verbose
+  - cargo build --verbose --features "opq-train openblas"
+  - cargo test --verbose --features "opq-train openblas"
 matrix:
   allow_failures:
     - rust: nightly

@@ -1,10 +1,15 @@
 # Reductive
 
-## LAPACK
+## Training of optimized product quantizers
 
-`reductive` requires a LAPACK implementation. Binary crates that use
-`reductive` must specify the BLAS/LAPACK implementation to be
-used. The following options are supported:
+Training of *optimized* product quantizers requires a LAPACK
+implementation. For this reason, training of the `OPQ` and
+`GaussianOPQ` quantized is feature-gated by the `opq-train` feature.
+Without the the `opq-train` feature, you can train the `PQ` quantizer
+and use pre-trained quantizers.
+
+If you use the `opq-train` feature, you also have to select a
+BLAS/LAPACK implementation. The supported implementations are:
 
 * OpenBLAS (feature: `openblas`)
 * Netlib (feature: `netlib`)
@@ -15,19 +20,20 @@ Accelerate does not currently provide the necessary LAPACK
 routines. This feature is present in case Accelerate adds the
 necessary routines.
 
-The backend can be selected as follows:
+The `opq-train` feature and a backend can be enabled as follows:
 
 ~~~toml
 [dependencies]
-reductive = { version = "0.1", features = ["openblas"] }
+reductive = { version = "0.1", features = ["opq-train", "openblas"] }
 ~~~
 
 ### Running tests
 
-When running tests, specify the BLAS/LAPACK implementation as a feature:
+To run *all* tests, enable the `opq-train` feature and specify the
+BLAS/LAPACK implementation:
 
 ~~~shell
-$ cargo test --verbose --features openblas
+$ cargo test --verbose --features "opq-train openblas"
 ~~~
 
 ### Multi-threaded OpenBLAS
