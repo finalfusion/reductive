@@ -5,12 +5,12 @@ use std::iter::Sum;
 
 use log::info;
 use ndarray::{
-    s, Array1, Array2, ArrayBase, ArrayView2, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat,
+    azip, s, Array1, Array2, ArrayBase, ArrayView2, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat,
 };
 #[cfg(feature = "opq-train")]
 use ndarray_linalg::{eigh::Eigh, lapack_traits::UPLO, svd::SVD, types::Scalar};
 use ndarray_parallel::prelude::*;
-use num_traits::AsPrimitive;
+use num_traits::{AsPrimitive, Bounded, Zero};
 use ordered_float::OrderedFloat;
 use rand::{FromEntropy, Rng};
 use rand_xorshift::XorShiftRng;
@@ -86,14 +86,18 @@ where
 /// Vector quantization.
 pub trait QuantizeVector<A> {
     /// Quantize a batch of vectors.
-    fn quantize_batch<S>(&self, x: ArrayBase<S, Ix2>) -> Array2<usize>
+    fn quantize_batch<I, S>(&self, x: ArrayBase<S, Ix2>) -> Array2<I>
     where
-        S: Data<Elem = A>;
+        I: AsPrimitive<usize> + Bounded + Zero,
+        S: Data<Elem = A>,
+        usize: AsPrimitive<I>;
 
     /// Quantize a vector.
-    fn quantize_vector<S>(&self, x: ArrayBase<S, Ix1>) -> Array1<usize>
+    fn quantize_vector<I, S>(&self, x: ArrayBase<S, Ix1>) -> Array1<I>
     where
-        S: Data<Elem = A>;
+        I: AsPrimitive<usize> + Bounded + Zero,
+        S: Data<Elem = A>,
+        usize: AsPrimitive<I>;
 }
 
 /// Vector reconstruction.
@@ -101,16 +105,18 @@ pub trait ReconstructVector<A> {
     /// Reconstruct a vector.
     ///
     /// The vectors are reconstructed from the quantization indices.
-    fn reconstruct_batch<S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
+    fn reconstruct_batch<I, S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
     where
-        S: Data<Elem = usize>;
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>;
 
     /// Reconstruct a batch of vectors.
     ///
     /// The vector is reconstructed from the quantization indices.
-    fn reconstruct_vector<S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
+    fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
     where
-        S: Data<Elem = usize>;
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>;
 }
 
 /// Optimized product quantizer for Gaussian variables (Ge et al., 2013).
@@ -176,17 +182,21 @@ impl<A> QuantizeVector<A> for GaussianOPQ<A>
 where
     A: NdFloat + Sum,
 {
-    fn quantize_batch<S>(&self, x: ArrayBase<S, Ix2>) -> Array2<usize>
+    fn quantize_batch<I, S>(&self, x: ArrayBase<S, Ix2>) -> Array2<I>
     where
+        I: AsPrimitive<usize> + Bounded + Zero,
         S: Data<Elem = A>,
+        usize: AsPrimitive<I>,
     {
         let rx = x.dot(&self.projection);
         self.pq.quantize_batch(rx)
     }
 
-    fn quantize_vector<S>(&self, x: ArrayBase<S, Ix1>) -> Array1<usize>
+    fn quantize_vector<I, S>(&self, x: ArrayBase<S, Ix1>) -> Array1<I>
     where
+        I: AsPrimitive<usize> + Bounded + Zero,
         S: Data<Elem = A>,
+        usize: AsPrimitive<I>,
     {
         let rx = x.dot(&self.projection);
         self.pq.quantize_vector(rx)
@@ -197,18 +207,20 @@ impl<A> ReconstructVector<A> for GaussianOPQ<A>
 where
     A: NdFloat + Sum,
 {
-    fn reconstruct_batch<S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
+    fn reconstruct_batch<I, S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
     where
-        S: Data<Elem = usize>,
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>,
     {
         self.pq
             .reconstruct_batch(quantized)
             .dot(&self.projection.t())
     }
 
-    fn reconstruct_vector<S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
+    fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
     where
-        S: Data<Elem = usize>,
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>,
     {
         self.pq
             .reconstruct_vector(quantized)
@@ -312,7 +324,7 @@ where
 
         // Do a quantization -> reconstruction roundtrip. We recycle the
         // projection matrix to avoid (re)allocations.
-        let quantized = quantize_batch(&centroids, instances.cols(), rx.view());
+        let quantized = quantize_batch::<_, usize, _>(centroids, instances.cols(), rx.view());
         let mut reconstructed = rx;
         reconstruct_batch_into(centroids, quantized, reconstructed.view_mut());
 
@@ -342,17 +354,21 @@ impl<A> QuantizeVector<A> for OPQ<A>
 where
     A: NdFloat + Sum,
 {
-    fn quantize_batch<S>(&self, x: ArrayBase<S, Ix2>) -> Array2<usize>
+    fn quantize_batch<I, S>(&self, x: ArrayBase<S, Ix2>) -> Array2<I>
     where
+        I: AsPrimitive<usize> + Bounded + Zero,
         S: Data<Elem = A>,
+        usize: AsPrimitive<I>,
     {
         let rx = x.dot(&self.projection);
         self.pq.quantize_batch(rx)
     }
 
-    fn quantize_vector<S>(&self, x: ArrayBase<S, Ix1>) -> Array1<usize>
+    fn quantize_vector<I, S>(&self, x: ArrayBase<S, Ix1>) -> Array1<I>
     where
+        I: AsPrimitive<usize> + Bounded + Zero,
         S: Data<Elem = A>,
+        usize: AsPrimitive<I>,
     {
         let rx = x.dot(&self.projection);
         self.pq.quantize_vector(rx)
@@ -363,18 +379,20 @@ impl<A> ReconstructVector<A> for OPQ<A>
 where
     A: NdFloat + Sum,
 {
-    fn reconstruct_batch<S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
+    fn reconstruct_batch<I, S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
     where
-        S: Data<Elem = usize>,
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>,
     {
         self.pq
             .reconstruct_batch(quantized)
             .dot(&self.projection.t())
     }
 
-    fn reconstruct_vector<S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
+    fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
     where
-        S: Data<Elem = usize>,
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>,
     {
         self.pq
             .reconstruct_vector(quantized)
@@ -521,16 +539,20 @@ impl<A> QuantizeVector<A> for PQ<A>
 where
     A: NdFloat + Sum,
 {
-    fn quantize_batch<S>(&self, x: ArrayBase<S, Ix2>) -> Array2<usize>
+    fn quantize_batch<I, S>(&self, x: ArrayBase<S, Ix2>) -> Array2<I>
     where
+        I: AsPrimitive<usize> + Bounded + Zero,
         S: Data<Elem = A>,
+        usize: AsPrimitive<I>,
     {
         quantize_batch(&self.quantizers, self.quantizer_len, x)
     }
 
-    fn quantize_vector<S>(&self, x: ArrayBase<S, Ix1>) -> Array1<usize>
+    fn quantize_vector<I, S>(&self, x: ArrayBase<S, Ix1>) -> Array1<I>
     where
+        I: AsPrimitive<usize> + Bounded + Zero,
         S: Data<Elem = A>,
+        usize: AsPrimitive<I>,
     {
         quantize(&self.quantizers, self.quantizer_len, x)
     }
@@ -540,16 +562,18 @@ impl<A> ReconstructVector<A> for PQ<A>
 where
     A: NdFloat + Sum,
 {
-    fn reconstruct_batch<S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
+    fn reconstruct_batch<I, S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
     where
-        S: Data<Elem = usize>,
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>,
     {
         reconstruct_batch(&self.quantizers, quantized)
     }
 
-    fn reconstruct_vector<S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
+    fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
     where
-        S: Data<Elem = usize>,
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>,
     {
         reconstruct(&self.quantizers, quantized)
     }
@@ -676,14 +700,16 @@ where
         .collect()
 }
 
-fn quantize<A, S>(
+fn quantize<A, I, S>(
     quantizers: &[Array2<A>],
     quantizer_len: usize,
     x: ArrayBase<S, Ix1>,
-) -> Array1<usize>
+) -> Array1<I>
 where
     A: NdFloat + Sum,
+    I: 'static + AsPrimitive<usize> + Bounded + Copy + Zero,
     S: Data<Elem = A>,
+    usize: AsPrimitive<I>,
 {
     assert_eq!(
         quantizer_len,
@@ -691,12 +717,17 @@ where
         "Quantizer and vector length mismatch"
     );
 
+    assert!(
+        quantizers[0].rows() - 1 <= I::max_value().as_(),
+        "Cannot store centroids in quantizer index type"
+    );
+
     let mut indices = Array1::zeros(quantizers.len());
 
     let mut offset = 0;
     for (quantizer, index) in quantizers.iter().zip(indices.iter_mut()) {
         let sub_vec = x.slice(s![offset..offset + quantizer.cols()]);
-        *index = cluster_assignment(quantizer.view(), sub_vec);
+        *index = cluster_assignment(quantizer.view(), sub_vec).as_();
 
         offset += quantizer.cols();
     }
@@ -704,14 +735,16 @@ where
     indices
 }
 
-fn quantize_batch<A, S>(
+fn quantize_batch<A, I, S>(
     quantizers: &[Array2<A>],
     quantizer_len: usize,
     x: ArrayBase<S, Ix2>,
-) -> Array2<usize>
+) -> Array2<I>
 where
     A: NdFloat + Sum,
+    I: 'static + AsPrimitive<usize> + Bounded + Copy + Zero,
     S: Data<Elem = A>,
+    usize: AsPrimitive<I>,
 {
     assert_eq!(
         quantizer_len,
@@ -725,7 +758,7 @@ where
     for (quantizer, mut quantized) in quantizers.iter().zip(quantized.axis_iter_mut(Axis(1))) {
         let sub_matrix = x.slice(s![.., offset..offset + quantizer.cols()]);
         let assignments = cluster_assignments(quantizer.view(), sub_matrix, Axis(0));
-        quantized.assign(&assignments);
+        azip!(mut quantized, assignments in { *quantized = assignments.as_() });
 
         offset += quantizer.cols();
     }
@@ -733,10 +766,11 @@ where
     quantized
 }
 
-fn reconstruct<A, S>(quantizers: &[Array2<A>], quantized: ArrayBase<S, Ix1>) -> Array1<A>
+fn reconstruct<A, I, S>(quantizers: &[Array2<A>], quantized: ArrayBase<S, Ix1>) -> Array1<A>
 where
     A: NdFloat,
-    S: Data<Elem = usize>,
+    I: AsPrimitive<usize>,
+    S: Data<Elem = I>,
 {
     assert_eq!(
         quantizers.len(),
@@ -749,17 +783,18 @@ where
     let mut offset = 0;
     for (&centroid, quantizer) in quantized.into_iter().zip(quantizers.iter()) {
         let mut sub_vec = reconstruction.slice_mut(s![offset..offset + quantizer.cols()]);
-        sub_vec.assign(&quantizer.index_axis(Axis(0), centroid));
+        sub_vec.assign(&quantizer.index_axis(Axis(0), centroid.as_()));
         offset += quantizer.cols();
     }
 
     reconstruction
 }
 
-fn reconstruct_batch<A, S>(quantizers: &[Array2<A>], quantized: ArrayBase<S, Ix2>) -> Array2<A>
+fn reconstruct_batch<A, I, S>(quantizers: &[Array2<A>], quantized: ArrayBase<S, Ix2>) -> Array2<A>
 where
     A: NdFloat,
-    S: Data<Elem = usize>,
+    I: AsPrimitive<usize>,
+    S: Data<Elem = I>,
 {
     let mut reconstructions =
         Array2::zeros((quantized.rows(), quantizers.len() * quantizers[0].cols()));
@@ -769,13 +804,14 @@ where
     reconstructions
 }
 
-fn reconstruct_batch_into<A, S>(
+fn reconstruct_batch_into<A, I, S>(
     quantizers: &[Array2<A>],
     quantized: ArrayBase<S, Ix2>,
     mut reconstructions: ArrayViewMut2<A>,
 ) where
     A: NdFloat,
-    S: Data<Elem = usize>,
+    I: AsPrimitive<usize>,
+    S: Data<Elem = I>,
 {
     assert_eq!(
         quantizers.len(),
@@ -792,7 +828,9 @@ fn reconstruct_batch_into<A, S>(
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{array, Array2};
+    use ndarray::{array, Array1, Array2};
+    use ndarray_rand::RandomExt;
+    use rand::distributions::Uniform;
 
     use super::{QuantizeVector, ReconstructVector, PQ};
 
@@ -877,6 +915,27 @@ mod tests {
         {
             assert_eq!(pq.quantize_vector(vector), quantization);
         }
+    }
+
+    #[test]
+    fn quantize_with_type() {
+        let uniform = Uniform::new(0f32, 1f32);
+        let pq = PQ {
+            quantizer_len: 10,
+            quantizers: vec![Array2::random((256, 10), uniform)],
+        };
+        pq.quantize_vector::<u8, _>(Array1::random((10,), uniform));
+    }
+
+    #[test]
+    #[should_panic]
+    fn quantize_with_too_narrow_type() {
+        let uniform = Uniform::new(0f32, 1f32);
+        let pq = PQ {
+            quantizer_len: 10,
+            quantizers: vec![Array2::random((257, 10), uniform)],
+        };
+        pq.quantize_vector::<u8, _>(Array1::random((10,), uniform));
     }
 
     #[test]
