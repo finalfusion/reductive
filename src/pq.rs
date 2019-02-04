@@ -29,10 +29,7 @@ use crate::linalg::Covariance;
 ///
 /// This traits specifies the training functions for product
 /// quantizers.
-pub trait TrainPQ<A>
-where
-    Self: Sized,
-{
+pub trait TrainPQ<A> {
     /// Train a product quantizer with the xorshift PRNG.
     ///
     /// Train a product quantizer with `n_subquantizers` subquantizers
@@ -46,7 +43,7 @@ where
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-    ) -> Self
+    ) -> PQ<A>
     where
         S: Sync + Data<Elem = A>,
     {
@@ -78,7 +75,7 @@ where
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         rng: &mut impl Rng,
-    ) -> Self
+    ) -> PQ<A>
     where
         S: Sync + Data<Elem = A>;
 }
@@ -132,13 +129,11 @@ pub trait ReconstructVector<A> {
 /// distribution. The `OPQ` quantizer provides a non-parametric,
 /// albeit slower to train implementation of optimized product
 /// quantization.
-pub struct GaussianOPQ<A> {
-    projection: Array2<A>,
-    pq: PQ<A>,
-}
+#[cfg(feature = "opq-train")]
+pub struct GaussianOPQ;
 
 #[cfg(feature = "opq-train")]
-impl<A> TrainPQ<A> for GaussianOPQ<A>
+impl<A> TrainPQ<A> for GaussianOPQ
 where
     A: NdFloat + Scalar + Sum,
     A::Real: NdFloat,
@@ -151,7 +146,7 @@ where
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         rng: &mut impl Rng,
-    ) -> Self
+    ) -> PQ<A>
     where
         S: Sync + Data<Elem = A>,
     {
@@ -174,57 +169,11 @@ where
             rng,
         );
 
-        GaussianOPQ { pq, projection }
-    }
-}
-
-impl<A> QuantizeVector<A> for GaussianOPQ<A>
-where
-    A: NdFloat + Sum,
-{
-    fn quantize_batch<I, S>(&self, x: ArrayBase<S, Ix2>) -> Array2<I>
-    where
-        I: AsPrimitive<usize> + Bounded + Zero,
-        S: Data<Elem = A>,
-        usize: AsPrimitive<I>,
-    {
-        let rx = x.dot(&self.projection);
-        self.pq.quantize_batch(rx)
-    }
-
-    fn quantize_vector<I, S>(&self, x: ArrayBase<S, Ix1>) -> Array1<I>
-    where
-        I: AsPrimitive<usize> + Bounded + Zero,
-        S: Data<Elem = A>,
-        usize: AsPrimitive<I>,
-    {
-        let rx = x.dot(&self.projection);
-        self.pq.quantize_vector(rx)
-    }
-}
-
-impl<A> ReconstructVector<A> for GaussianOPQ<A>
-where
-    A: NdFloat + Sum,
-{
-    fn reconstruct_batch<I, S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
-    where
-        I: AsPrimitive<usize>,
-        S: Data<Elem = I>,
-    {
-        self.pq
-            .reconstruct_batch(quantized)
-            .dot(&self.projection.t())
-    }
-
-    fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
-    where
-        I: AsPrimitive<usize>,
-        S: Data<Elem = I>,
-    {
-        self.pq
-            .reconstruct_vector(quantized)
-            .dot(&self.projection.t())
+        PQ {
+            projection: Some(projection),
+            quantizer_len: pq.quantizer_len,
+            quantizers: pq.quantizers,
+        }
     }
 }
 
@@ -243,13 +192,11 @@ where
 /// This quantizer always trains the quantizer in one attempt, so the
 /// `n_attempts` argument of the `TrainPQ` constructors currently has
 /// no effect.
-pub struct OPQ<A> {
-    projection: Array2<A>,
-    pq: PQ<A>,
-}
+#[cfg(feature = "opq-train")]
+pub struct OPQ;
 
 #[cfg(feature = "opq-train")]
-impl<A> TrainPQ<A> for OPQ<A>
+impl<A> TrainPQ<A> for OPQ
 where
     A: NdFloat + Scalar + Sum,
     A::Real: NdFloat,
@@ -262,7 +209,7 @@ where
         _n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         rng: &mut impl Rng,
-    ) -> Self
+    ) -> PQ<A>
     where
         S: Sync + Data<Elem = A>,
     {
@@ -292,28 +239,25 @@ where
             Self::train_iteration(projection.view_mut(), &mut centroids, instances.view());
         }
 
-        OPQ {
-            pq: PQ {
-                quantizers: centroids,
-                quantizer_len: instances.cols(),
-            },
-            projection,
+        PQ {
+            projection: Some(projection),
+            quantizers: centroids,
+            quantizer_len: instances.cols(),
         }
     }
 }
 
 #[cfg(feature = "opq-train")]
-impl<A> OPQ<A>
-where
-    A: NdFloat + Scalar + Sum,
-    A::Real: NdFloat,
-    usize: AsPrimitive<A>,
-{
-    fn train_iteration(
+impl OPQ {
+    fn train_iteration<A>(
         mut projection: ArrayViewMut2<A>,
         centroids: &mut [Array2<A>],
         instances: ArrayView2<A>,
-    ) {
+    ) where
+        A: NdFloat + Scalar + Sum,
+        A::Real: NdFloat,
+        usize: AsPrimitive<A>,
+    {
         info!("Updating subquantizers");
 
         // Perform one iteration of cluster updates, using regular k-means.
@@ -335,8 +279,11 @@ where
         projection.assign(&u.unwrap().dot(&vt.unwrap()));
     }
 
-    fn update_subquantizers<S>(centroids: &mut [Array2<A>], instances: ArrayBase<S, Ix2>)
+    fn update_subquantizers<A, S>(centroids: &mut [Array2<A>], instances: ArrayBase<S, Ix2>)
     where
+        A: NdFloat + Scalar + Sum,
+        A::Real: NdFloat,
+        usize: AsPrimitive<A>,
         S: Sync + Data<Elem = A>,
     {
         centroids
@@ -350,56 +297,6 @@ where
     }
 }
 
-impl<A> QuantizeVector<A> for OPQ<A>
-where
-    A: NdFloat + Sum,
-{
-    fn quantize_batch<I, S>(&self, x: ArrayBase<S, Ix2>) -> Array2<I>
-    where
-        I: AsPrimitive<usize> + Bounded + Zero,
-        S: Data<Elem = A>,
-        usize: AsPrimitive<I>,
-    {
-        let rx = x.dot(&self.projection);
-        self.pq.quantize_batch(rx)
-    }
-
-    fn quantize_vector<I, S>(&self, x: ArrayBase<S, Ix1>) -> Array1<I>
-    where
-        I: AsPrimitive<usize> + Bounded + Zero,
-        S: Data<Elem = A>,
-        usize: AsPrimitive<I>,
-    {
-        let rx = x.dot(&self.projection);
-        self.pq.quantize_vector(rx)
-    }
-}
-
-impl<A> ReconstructVector<A> for OPQ<A>
-where
-    A: NdFloat + Sum,
-{
-    fn reconstruct_batch<I, S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
-    where
-        I: AsPrimitive<usize>,
-        S: Data<Elem = I>,
-    {
-        self.pq
-            .reconstruct_batch(quantized)
-            .dot(&self.projection.t())
-    }
-
-    fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
-    where
-        I: AsPrimitive<usize>,
-        S: Data<Elem = I>,
-    {
-        self.pq
-            .reconstruct_vector(quantized)
-            .dot(&self.projection.t())
-    }
-}
-
 /// Product quantizer (Jégou et al., 2011).
 ///
 /// A product quantizer is a vector quantizer that slices a vector and
@@ -407,6 +304,7 @@ where
 /// *i*-th subquantizer. Vector reconstruction consists of concatenating
 /// the centroids that represent the slices.
 pub struct PQ<A> {
+    projection: Option<Array2<A>>,
     quantizer_len: usize,
     quantizers: Vec<Array2<A>>,
 }
@@ -501,7 +399,7 @@ where
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         rng: &mut impl Rng,
-    ) -> Self
+    ) -> PQ<A>
     where
         S: Sync + Data<Elem = A>,
     {
@@ -529,6 +427,7 @@ where
             .collect();
 
         PQ {
+            projection: None,
             quantizer_len: instances.cols(),
             quantizers,
         }
@@ -545,7 +444,13 @@ where
         S: Data<Elem = A>,
         usize: AsPrimitive<I>,
     {
-        quantize_batch(&self.quantizers, self.quantizer_len, x)
+        match self.projection {
+            Some(ref projection) => {
+                let rx = x.dot(projection);
+                quantize_batch(&self.quantizers, self.quantizer_len, rx)
+            }
+            None => quantize_batch(&self.quantizers, self.quantizer_len, x),
+        }
     }
 
     fn quantize_vector<I, S>(&self, x: ArrayBase<S, Ix1>) -> Array1<I>
@@ -554,7 +459,13 @@ where
         S: Data<Elem = A>,
         usize: AsPrimitive<I>,
     {
-        quantize(&self.quantizers, self.quantizer_len, x)
+        match self.projection {
+            Some(ref projection) => {
+                let rx = x.dot(projection);
+                quantize(&self.quantizers, self.quantizer_len, rx)
+            }
+            None => quantize(&self.quantizers, self.quantizer_len, x),
+        }
     }
 }
 
@@ -567,7 +478,11 @@ where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>,
     {
-        reconstruct_batch(&self.quantizers, quantized)
+        let reconstruction = reconstruct_batch(&self.quantizers, quantized);
+        match self.projection {
+            Some(ref projection) => reconstruction.dot(&projection.t()),
+            None => reconstruction,
+        }
     }
 
     fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
@@ -575,7 +490,11 @@ where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>,
     {
-        reconstruct(&self.quantizers, quantized)
+        let reconstruction = reconstruct(&self.quantizers, quantized);
+        match self.projection {
+            Some(ref projection) => reconstruction.dot(&projection.t()),
+            None => reconstruction,
+        }
     }
 }
 
@@ -863,6 +782,7 @@ mod tests {
         ];
 
         PQ {
+            projection: None,
             quantizer_len: 6,
             quantizers,
         }
@@ -921,6 +841,7 @@ mod tests {
     fn quantize_with_type() {
         let uniform = Uniform::new(0f32, 1f32);
         let pq = PQ {
+            projection: None,
             quantizer_len: 10,
             quantizers: vec![Array2::random((256, 10), uniform)],
         };
@@ -932,6 +853,7 @@ mod tests {
     fn quantize_with_too_narrow_type() {
         let uniform = Uniform::new(0f32, 1f32);
         let pq = PQ {
+            projection: None,
             quantizer_len: 10,
             quantizers: vec![Array2::random((257, 10), uniform)],
         };
