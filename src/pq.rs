@@ -95,6 +95,9 @@ pub trait QuantizeVector<A> {
         I: AsPrimitive<usize> + Bounded + Zero,
         S: Data<Elem = A>,
         usize: AsPrimitive<I>;
+
+    /// Get the length of a vector after quantization.
+    fn quantized_len(&self) -> usize;
 }
 
 /// Vector reconstruction.
@@ -114,6 +117,9 @@ pub trait ReconstructVector<A> {
     where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>;
+
+    /// Get the length of a vector after reconstruction.
+    fn reconstructed_len(&self) -> usize;
 }
 
 /// Optimized product quantizer for Gaussian variables (Ge et al., 2013).
@@ -467,6 +473,10 @@ where
             None => quantize(&self.quantizers, self.quantizer_len, x),
         }
     }
+
+    fn quantized_len(&self) -> usize {
+        self.quantizers.len()
+    }
 }
 
 impl<A> ReconstructVector<A> for PQ<A>
@@ -495,6 +505,10 @@ where
             Some(ref projection) => reconstruction.dot(&projection.t()),
             None => reconstruction,
         }
+    }
+
+    fn reconstructed_len(&self) -> usize {
+        self.quantizer_len
     }
 }
 
@@ -858,6 +872,14 @@ mod tests {
             quantizers: vec![Array2::random((257, 10), uniform)],
         };
         pq.quantize_vector::<u8, _>(Array1::random((10,), uniform));
+    }
+
+    #[test]
+    fn quantizer_lens() {
+        let quantizer = test_pq();
+
+        assert_eq!(quantizer.quantized_len(), 2);
+        assert_eq!(quantizer.reconstructed_len(), 6);
     }
 
     #[test]
