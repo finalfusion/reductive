@@ -309,6 +309,7 @@ impl OPQ {
 /// assigns to the *i*-th slice the index of the nearest centroid of the
 /// *i*-th subquantizer. Vector reconstruction consists of concatenating
 /// the centroids that represent the slices.
+#[derive(Debug, PartialEq)]
 pub struct PQ<A> {
     projection: Option<Array2<A>>,
     quantizer_len: usize,
