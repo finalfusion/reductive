@@ -61,7 +61,9 @@ where
         assert!(k > 0, "Cannot pick 0 random centroids");
         assert!(
             k < data.len_of(instance_axis),
-            "Cannot pick more centroids than instances"
+            "Cannot pick more centroids than instances: {} instances, {} centroids",
+            data.len_of(instance_axis),
+            k
         );
 
         // Use random instances as centroids.
