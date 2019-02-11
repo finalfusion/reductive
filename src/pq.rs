@@ -321,6 +321,40 @@ where
     A: NdFloat + Sum,
     usize: AsPrimitive<A>,
 {
+    pub fn new(projection: Option<Array2<A>>, quantizers: Vec<Array2<A>>) -> Self {
+        assert!(
+            !quantizers.is_empty(),
+            "Attempted to construct a product quantizer without quantizers."
+        );
+
+        // Check that subquantizers have the same shapes.
+        let mut shape_iter = quantizers.iter().map(|q| q.shape());
+        let first_shape = shape_iter.next().unwrap();
+        assert!(
+            shape_iter.all(|shape| shape == first_shape),
+            "Diverging quantizer shapes."
+        );
+
+        let quantizer_len = quantizers.len() * quantizers[0].cols();
+
+        if let Some(ref projection) = projection {
+            assert_eq!(
+                projection.shape(),
+                [quantizer_len; 2],
+                "Incorrect projection matrix shape, was: {:?}, should be [{}, {}]",
+                projection.shape(),
+                quantizer_len,
+                quantizer_len
+            );
+        }
+
+        PQ {
+            projection,
+            quantizer_len,
+            quantizers,
+        }
+    }
+
     fn check_quantizer_invariants(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
@@ -349,6 +383,16 @@ where
             n_attempts > 0,
             "The subquantizers should be optimized for at least one attempt."
         );
+    }
+
+    /// Get the number of centroids per quantizer.
+    pub fn n_quantizer_centroids(&self) -> usize {
+        self.quantizers[0].rows()
+    }
+
+    /// Get the projection matrix (if used).
+    pub fn projection(&self) -> Option<ArrayView2<A>> {
+        self.projection.as_ref().map(Array2::view)
     }
 
     /// Train a subquantizer.
