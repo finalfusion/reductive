@@ -1,0 +1,13 @@
+image: archlinux
+packages:
+  - rust
+  - openblas
+sources:
+  - https://git.sr.ht/~danieldk/reductive
+tasks:
+  - build: |
+      cd reductive
+      cargo build --verbose --features "opq-train openblas"
+  - test: |
+      cd reductive
+      cargo test --verbose --features "opq-train openblas"
