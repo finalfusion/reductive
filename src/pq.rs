@@ -297,6 +297,8 @@ impl OPQ {
             .enumerate()
             .for_each(|(sq, sq_centroids)| {
                 let offset = sq * sq_centroids.cols();
+                // ndarray#474
+                #[allow(clippy::deref_addrof)]
                 let sq_instances = instances.slice(s![.., offset..offset + sq_centroids.cols()]);
                 sq_instances.kmeans_iteration(Axis(0), sq_centroids.view_mut());
             });
@@ -414,6 +416,8 @@ where
         let sq_dims = quantizer.cols();
 
         let offset = idx * sq_dims;
+        // ndarray#474
+        #[allow(clippy::deref_addrof)]
         let sq_instances = instances.slice(s![.., offset..offset + sq_dims]);
 
         iter::repeat_with(|| {
@@ -669,9 +673,10 @@ where
     let mut random_centroids = RandomInstanceCentroids::new(rng);
 
     (0..n_subquantizers)
-        .into_iter()
         .map(|sq| {
             let offset = sq * sq_dims;
+            // ndarray#474
+            #[allow(clippy::deref_addrof)]
             let sq_instances = instances.slice(s![.., offset..offset + sq_dims]);
             random_centroids.initial_centroids(sq_instances, Axis(0), codebook_len)
         })
@@ -704,6 +709,8 @@ where
 
     let mut offset = 0;
     for (quantizer, index) in quantizers.iter().zip(indices.iter_mut()) {
+        // ndarray#474
+        #[allow(clippy::deref_addrof)]
         let sub_vec = x.slice(s![offset..offset + quantizer.cols()]);
         *index = cluster_assignment(quantizer.view(), sub_vec).as_();
 
@@ -734,6 +741,8 @@ where
 
     let mut offset = 0;
     for (quantizer, mut quantized) in quantizers.iter().zip(quantized.axis_iter_mut(Axis(1))) {
+        // ndarray#474
+        #[allow(clippy::deref_addrof)]
         let sub_matrix = x.slice(s![.., offset..offset + quantizer.cols()]);
         let assignments = cluster_assignments(quantizer.view(), sub_matrix, Axis(0));
         azip!(mut quantized, assignments in { *quantized = assignments.as_() });
@@ -760,6 +769,8 @@ where
 
     let mut offset = 0;
     for (&centroid, quantizer) in quantized.into_iter().zip(quantizers.iter()) {
+        // ndarray#474
+        #[allow(clippy::deref_addrof)]
         let mut sub_vec = reconstruction.slice_mut(s![offset..offset + quantizer.cols()]);
         sub_vec.assign(&quantizer.index_axis(Axis(0), centroid.as_()));
         offset += quantizer.cols();
