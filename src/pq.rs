@@ -8,11 +8,16 @@ use ndarray::{
     azip, s, Array1, Array2, ArrayBase, ArrayView2, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat,
 };
 #[cfg(feature = "opq-train")]
-use ndarray_linalg::{eigh::Eigh, lapack_traits::UPLO, svd::SVD, types::Scalar};
+use ndarray_linalg::{
+    eigh::Eigh,
+    lapack::{Lapack, UPLO},
+    svd::SVD,
+    types::Scalar,
+};
 use ndarray_parallel::prelude::*;
 use num_traits::{AsPrimitive, Bounded, Zero};
 use ordered_float::OrderedFloat;
-use rand::{FromEntropy, Rng};
+use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 
@@ -141,7 +146,7 @@ pub struct GaussianOPQ;
 #[cfg(feature = "opq-train")]
 impl<A> TrainPQ<A> for GaussianOPQ
 where
-    A: NdFloat + Scalar + Sum,
+    A: Lapack + NdFloat + Scalar + Sum,
     A::Real: NdFloat,
     usize: AsPrimitive<A>,
 {
@@ -204,7 +209,7 @@ pub struct OPQ;
 #[cfg(feature = "opq-train")]
 impl<A> TrainPQ<A> for OPQ
 where
-    A: NdFloat + Scalar + Sum,
+    A: Lapack + NdFloat + Scalar + Sum,
     A::Real: NdFloat,
     usize: AsPrimitive<A>,
 {
@@ -260,7 +265,7 @@ impl OPQ {
         centroids: &mut [Array2<A>],
         instances: ArrayView2<A>,
     ) where
-        A: NdFloat + Scalar + Sum,
+        A: Lapack + NdFloat + Scalar + Sum,
         A::Real: NdFloat,
         usize: AsPrimitive<A>,
     {
@@ -628,7 +633,7 @@ where
 #[cfg(feature = "opq-train")]
 fn create_projection_matrix<A>(instances: ArrayView2<A>, n_subquantizers: usize) -> Array2<A>
 where
-    A: NdFloat + Scalar,
+    A: Lapack + NdFloat + Scalar,
     A::Real: NdFloat,
     usize: AsPrimitive<A>,
 {

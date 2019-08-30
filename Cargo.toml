@@ -15,19 +15,18 @@ ndarray-parallel = "0.9"
 num-traits = "0.2"
 ordered-float = "1"
 log = "0.4"
-rand = "0.6"
-rand_xorshift = "0.1"
+rand = { version = "0.7", features = [ "small_rng" ] }
+rand_xorshift = "0.2"
 rayon = "1"
 
-ndarray-linalg = { version = "0.10", optional = true }
+ndarray-linalg = { version = "0.11", optional = true }
 
 [dev-dependencies]
-rand = "0.6"
+rand_distr = "0.2"
 
 [features]
 default    = []
 opq-train  = ["ndarray-linalg"]
-accelerate = ["ndarray-linalg/accelerate"]
 intel-mkl  = ["ndarray-linalg/intel-mkl"]
 netlib     = ["ndarray-linalg/netlib"]
 openblas   = ["ndarray-linalg/openblas"]

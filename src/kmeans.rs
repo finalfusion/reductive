@@ -358,8 +358,8 @@ where
 #[cfg(test)]
 mod tests {
     use ndarray::{array, stack, Array2, ArrayBase, Axis, Data, Ix2};
-    use rand::distributions::Normal;
     use rand::{Rng, SeedableRng};
+    use rand_distr::Normal;
     use rand_xorshift::XorShiftRng;
 
     use super::{
@@ -438,8 +438,11 @@ mod tests {
 
         let mut spheres = Vec::new();
         for center in centers.outer_iter() {
-            let mut sphere =
-                Array2::random_using((n_samples, center.len()), Normal::new(0., 0.01), &mut rng);
+            let mut sphere = Array2::random_using(
+                (n_samples, center.len()),
+                Normal::new(0., 0.01).unwrap(),
+                &mut rng,
+            );
             sphere += &center;
             spheres.push(sphere);
         }
