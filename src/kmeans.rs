@@ -358,7 +358,6 @@ where
 #[cfg(test)]
 mod tests {
     use ndarray::{array, stack, Array2, ArrayBase, Axis, Data, Ix2};
-    use ndarray_rand::RandomExt;
     use rand::distributions::Normal;
     use rand::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
@@ -367,6 +366,7 @@ mod tests {
         cluster_assignments, mean_squared_error, update_centroids, KMeans, NIterationsCondition,
         RandomInstanceCentroids,
     };
+    use crate::ndarray_rand::RandomExt;
 
     const SEED: [u8; 16] = [
         0xd3, 0x68, 0x34, 0x05, 0xf2, 0x6e, 0xa4, 0x45, 0x2b, 0x2b, 0xea, 0x1f, 0x08, 0xce, 0x88,

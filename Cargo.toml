@@ -22,7 +22,6 @@ rayon = "1"
 ndarray-linalg = { version = "0.10", optional = true }
 
 [dev-dependencies]
-ndarray-rand = "0.9"
 rand = "0.6"
 
 [features]

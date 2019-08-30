@@ -818,10 +818,10 @@ fn reconstruct_batch_into<A, I, S>(
 #[cfg(test)]
 mod tests {
     use ndarray::{array, Array1, Array2};
-    use ndarray_rand::RandomExt;
     use rand::distributions::Uniform;
 
     use super::{QuantizeVector, ReconstructVector, PQ};
+    use crate::ndarray_rand::RandomExt;
 
     fn test_vectors() -> Array2<f32> {
         array![
