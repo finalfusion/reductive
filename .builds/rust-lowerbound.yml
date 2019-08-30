@@ -1,0 +1,16 @@
+image: archlinux
+packages:
+  - rustup
+  - openblas
+sources:
+  - https://git.sr.ht/~danieldk/reductive
+tasks:
+  - setup: |
+      rustup install 1.31.0
+      rustup default 1.31.0
+  - build: |
+      cd reductive
+      cargo build --verbose --features "opq-train openblas"
+  - test: |
+      cd reductive
+      cargo test --verbose --features "opq-train openblas"
