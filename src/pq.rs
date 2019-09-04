@@ -14,7 +14,6 @@ use ndarray_linalg::{
     svd::SVD,
     types::Scalar,
 };
-use ndarray_parallel::prelude::*;
 use num_traits::{AsPrimitive, Bounded, Zero};
 use ordered_float::OrderedFloat;
 use rand::{Rng, SeedableRng};
