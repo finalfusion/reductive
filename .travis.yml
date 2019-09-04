@@ -1,20 +1,15 @@
 language: rust
-rust:
-  - stable
-  - beta
-  - nightly
-script:
-  - cargo build --verbose
-  - cargo test --verbose
-  - cargo build --verbose --features "opq-train openblas"
-  - cargo test --verbose --features "opq-train openblas"
-matrix:
-  allow_failures:
-    - rust: nightly
-sudo: required
-dist: trusty
 addons:
   apt:
     packages:
       - libopenblas-dev
       - gfortran
+sudo: required
+rust:
+  - 1.32.0
+  - stable
+before_script:
+  - rustup component add clippy
+  - rustup component add rustfmt
+script: ci/script.sh
+dist: trusty
