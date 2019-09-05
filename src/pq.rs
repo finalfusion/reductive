@@ -16,7 +16,7 @@ use ndarray_linalg::{
 };
 use num_traits::{AsPrimitive, Bounded, Zero};
 use ordered_float::OrderedFloat;
-use rand::{Rng, SeedableRng};
+use rand::{Rng, RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 
@@ -28,6 +28,7 @@ use crate::kmeans::{
 };
 #[cfg(feature = "opq-train")]
 use crate::linalg::Covariance;
+use crate::rng::ReseedOnCloneRng;
 
 /// Training triat for product quantizers.
 ///
@@ -51,14 +52,13 @@ pub trait TrainPQ<A> {
     where
         S: Sync + Data<Elem = A>,
     {
-        let mut rng = XorShiftRng::from_entropy();
         Self::train_pq_using(
             n_subquantizers,
             n_subquantizer_bits,
             n_iterations,
             n_attempts,
             instances,
-            &mut rng,
+            XorShiftRng::from_entropy(),
         )
     }
 
@@ -72,16 +72,17 @@ pub trait TrainPQ<A> {
     ///
     /// `rng` is used for picking the initial cluster centroids of
     /// each subquantizer.
-    fn train_pq_using<S>(
+    fn train_pq_using<S, R>(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-        rng: &mut impl Rng,
+        rng: R,
     ) -> PQ<A>
     where
-        S: Sync + Data<Elem = A>;
+        S: Sync + Data<Elem = A>,
+        R: RngCore + SeedableRng + Send;
 }
 
 /// Vector quantization.
@@ -149,16 +150,17 @@ where
     A::Real: NdFloat,
     usize: AsPrimitive<A>,
 {
-    fn train_pq_using<S>(
+    fn train_pq_using<S, R>(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-        rng: &mut impl Rng,
+        rng: R,
     ) -> PQ<A>
     where
         S: Sync + Data<Elem = A>,
+        R: RngCore + SeedableRng + Send,
     {
         PQ::check_quantizer_invariants(
             n_subquantizers,
@@ -212,16 +214,17 @@ where
     A::Real: NdFloat,
     usize: AsPrimitive<A>,
 {
-    fn train_pq_using<S>(
+    fn train_pq_using<S, R>(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
         n_iterations: usize,
         _n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-        rng: &mut impl Rng,
+        mut rng: R,
     ) -> PQ<A>
     where
         S: Sync + Data<Elem = A>,
+        R: RngCore,
     {
         PQ::check_quantizer_invariants(
             n_subquantizers,
@@ -240,7 +243,7 @@ where
             n_subquantizers,
             2usize.pow(n_subquantizer_bits),
             rx.view(),
-            rng,
+            &mut rng,
         );
 
         // Iteratively refine the clusters and the projection matrix.
@@ -403,29 +406,38 @@ where
 
     /// Train a subquantizer.
     ///
-    /// `sq` is the index of the subquantizer, `sq_dims` the number of
-    /// dimensions that are quantized, and `codebook_len` the code book
-    /// size of the quantizer.
+    /// `subquantizer_idx` is the index of the subquantizer, where
+    /// `subquantizer_idx < n_subquantizers`, the overall number of
+    /// subquantizers. `codebook_len` is the code book size of the
+    /// quantizer.
     fn train_subquantizer(
-        idx: usize,
-        quantizer: Array2<A>,
+        subquantizer_idx: usize,
+        n_subquantizers: usize,
+        codebook_len: usize,
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayView2<A>,
+        mut rng: impl Rng,
     ) -> Array2<A> {
         assert!(n_attempts > 0, "Cannot train a subquantizer in 0 attempts.");
 
-        info!("Training PQ subquantizer {}", idx);
+        info!("Training PQ subquantizer {}", subquantizer_idx);
 
-        let sq_dims = quantizer.cols();
+        let sq_dims = instances.cols() / n_subquantizers;
 
-        let offset = idx * sq_dims;
+        let offset = subquantizer_idx * sq_dims;
         // ndarray#474
         #[allow(clippy::deref_addrof)]
         let sq_instances = instances.slice(s![.., offset..offset + sq_dims]);
 
         iter::repeat_with(|| {
-            let mut quantizer = quantizer.to_owned();
+            let mut quantizer = subquantizer_initial_centroids(
+                subquantizer_idx,
+                n_subquantizers,
+                codebook_len,
+                instances,
+                &mut rng,
+            );
             let loss = sq_instances.kmeans_with_centroids(
                 Axis(0),
                 quantizer.view_mut(),
@@ -451,16 +463,17 @@ where
     A: NdFloat + Sum,
     usize: AsPrimitive<A>,
 {
-    fn train_pq_using<S>(
+    fn train_pq_using<S, R>(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-        rng: &mut impl Rng,
+        rng: R,
     ) -> PQ<A>
     where
         S: Sync + Data<Elem = A>,
+        R: RngCore + SeedableRng + Send,
     {
         Self::check_quantizer_invariants(
             n_subquantizers,
@@ -470,18 +483,25 @@ where
             instances.view(),
         );
 
-        let quantizers = initial_centroids(
-            n_subquantizers,
-            2usize.pow(n_subquantizer_bits),
-            instances.view(),
-            rng,
-        );
+        let rng = ReseedOnCloneRng(rng);
 
-        let quantizers = quantizers
+        let rngs = iter::repeat_with(|| rng.clone())
+            .take(n_subquantizers)
+            .collect::<Vec<_>>();
+
+        let quantizers = rngs
             .into_par_iter()
             .enumerate()
-            .map(|(idx, quantizer)| {
-                Self::train_subquantizer(idx, quantizer, n_iterations, n_attempts, instances.view())
+            .map(|(idx, rng)| {
+                Self::train_subquantizer(
+                    idx,
+                    n_subquantizers,
+                    2usize.pow(n_subquantizer_bits),
+                    n_iterations,
+                    n_attempts,
+                    instances.view(),
+                    rng,
+                )
             })
             .collect();
 
@@ -662,6 +682,34 @@ where
     transformations
 }
 
+/// Create initial centroids for a single quantizer.
+///
+/// `subquantizer_idx` is the subquantizer index for which the initial
+/// centroids should be picked. `subquantizer_idx < n_subquantizers`,
+/// the total number of subquantizers.
+fn subquantizer_initial_centroids<S, A>(
+    subquantizer_idx: usize,
+    n_subquantizers: usize,
+    codebook_len: usize,
+    instances: ArrayBase<S, Ix2>,
+    rng: &mut impl Rng,
+) -> Array2<A>
+where
+    S: Data<Elem = A>,
+    A: NdFloat,
+{
+    let sq_dims = instances.cols() / n_subquantizers;
+
+    let mut random_centroids = RandomInstanceCentroids::new(rng);
+
+    let offset = subquantizer_idx * sq_dims;
+    // ndarray#474
+    #[allow(clippy::deref_addrof)]
+    let sq_instances = instances.slice(s![.., offset..offset + sq_dims]);
+    random_centroids.initial_centroids(sq_instances, Axis(0), codebook_len)
+}
+
+#[cfg(feature = "opq-train")]
 fn initial_centroids<S, A>(
     n_subquantizers: usize,
     codebook_len: usize,
@@ -672,17 +720,9 @@ where
     S: Data<Elem = A>,
     A: NdFloat,
 {
-    let sq_dims = instances.cols() / n_subquantizers;
-
-    let mut random_centroids = RandomInstanceCentroids::new(rng);
-
     (0..n_subquantizers)
         .map(|sq| {
-            let offset = sq * sq_dims;
-            // ndarray#474
-            #[allow(clippy::deref_addrof)]
-            let sq_instances = instances.slice(s![.., offset..offset + sq_dims]);
-            random_centroids.initial_centroids(sq_instances, Axis(0), codebook_len)
+            subquantizer_initial_centroids(sq, n_subquantizers, codebook_len, instances.view(), rng)
         })
         .collect()
 }
