@@ -65,6 +65,10 @@ where
             data.len_of(instance_axis),
             k
         );
+        assert!(
+            data.len() / data.len_of(instance_axis) > 0,
+            "Cannot pick centroids from zero-length instances"
+        );
 
         // Use random instances as centroids.
         let uniform = Uniform::new(0, data.len_of(instance_axis));
