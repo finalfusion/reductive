@@ -861,11 +861,30 @@ fn reconstruct_batch_into<A, I, S>(
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{array, Array1, Array2};
+    use ndarray::{array, Array1, Array2, ArrayView2};
     use rand::distributions::Uniform;
 
-    use super::{QuantizeVector, ReconstructVector, PQ};
+    #[cfg(feature = "opq-train")]
+    use super::OPQ;
+    use super::{QuantizeVector, ReconstructVector, TrainPQ, PQ};
+    use crate::linalg::EuclideanDistance;
     use crate::ndarray_rand::RandomExt;
+
+    /// Calculate the average euclidean distances between the the given
+    /// instances and the instances returned by quantizing and then
+    /// reconstructing the instances.
+    fn avg_euclidean_loss(instances: ArrayView2<f32>, quantizer: &PQ<f32>) -> f32 {
+        let mut euclidean_loss = 0f32;
+
+        let quantized: Array2<u8> = quantizer.quantize_batch(instances);
+        let reconstructions = quantizer.reconstruct_batch(quantized);
+
+        for (instance, reconstruction) in instances.outer_iter().zip(reconstructions.outer_iter()) {
+            euclidean_loss += instance.euclidean_distance(reconstruction);
+        }
+
+        euclidean_loss / instances.rows() as f32
+    }
 
     fn test_vectors() -> Array2<f32> {
         array![
@@ -940,6 +959,28 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "opq-train")]
+    fn quantize_with_gaussian_opq() {
+        let uniform = Uniform::new(0f32, 1f32);
+        let instances = Array2::random((256, 20), uniform);
+        let pq = OPQ::train_pq(10, 7, 10, 1, instances.view());
+        let loss = avg_euclidean_loss(instances.view(), &pq);
+        // Loss is around 0.09.
+        assert!(loss < 0.1);
+    }
+
+    #[test]
+    #[cfg(feature = "opq-train")]
+    fn quantize_with_opq() {
+        let uniform = Uniform::new(0f32, 1f32);
+        let instances = Array2::random((256, 20), uniform);
+        let pq = OPQ::train_pq(10, 7, 10, 1, instances.view());
+        let loss = avg_euclidean_loss(instances.view(), &pq);
+        // Loss is around 0.09.
+        assert!(loss < 0.1);
+    }
+
+    #[test]
     fn quantize_with_predefined_codebook() {
         let pq = test_pq();
 
@@ -949,6 +990,16 @@ mod tests {
         {
             assert_eq!(pq.quantize_vector(vector), quantization);
         }
+    }
+
+    #[test]
+    fn quantize_with_pq() {
+        let uniform = Uniform::new(0f32, 1f32);
+        let instances = Array2::random((256, 20), uniform);
+        let pq = PQ::train_pq(10, 7, 10, 1, instances.view());
+        let loss = avg_euclidean_loss(instances.view(), &pq);
+        // Loss is around 0.077.
+        assert!(loss < 0.08);
     }
 
     #[test]
