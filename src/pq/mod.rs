@@ -10,6 +10,9 @@ mod opq;
 #[cfg(feature = "opq-train")]
 pub use self::opq::OPQ;
 
+mod precompute;
+pub use precompute::PrecomputedPQ;
+
 #[allow(clippy::module_inception)]
 mod pq;
 pub use self::pq::PQ;
