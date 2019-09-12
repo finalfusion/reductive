@@ -11,6 +11,7 @@ repository = "https://git.sr.ht/~danieldk/reductive"
 
 [dependencies]
 ndarray = "0.12"
+ndarray-parallel = "0.9"
 num-traits = "0.2"
 ordered-float = "1"
 log = "0.4"

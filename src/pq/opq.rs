@@ -3,13 +3,17 @@
 use std::iter::Sum;
 
 use log::info;
-use ndarray::{s, Array2, ArrayBase, ArrayView2, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat};
+use ndarray::{
+    s, stack, Array2, ArrayBase, ArrayView2, ArrayViewMut2, ArrayViewMut3, Axis, Data, Ix1, Ix2,
+    NdFloat,
+};
 use ndarray_linalg::{
     eigh::Eigh,
     lapack::{Lapack, UPLO},
     svd::SVD,
     types::Scalar,
 };
+use ndarray_parallel::NdarrayIntoParallelIterator;
 use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 use rand::{Rng, RngCore};
@@ -69,23 +73,32 @@ where
         let rx = instances.dot(&projection);
 
         // Pick centroids.
-        let mut centroids = Self::initial_centroids(
+        let centroids = Self::initial_centroids(
             n_subquantizers,
             2usize.pow(n_subquantizer_bits),
             rx.view(),
             &mut rng,
         );
 
+        let views = centroids
+            .iter()
+            .map(|c| c.view().insert_axis(Axis(0)))
+            .collect::<Vec<_>>();
+        let mut quantizers = stack(Axis(0), &views).expect("Cannot stack subquantizers");
+
         // Iteratively refine the clusters and the projection matrix.
         for i in 0..n_iterations {
             info!("Train iteration {}", i);
-            Self::train_iteration(projection.view_mut(), &mut centroids, instances.view());
+            Self::train_iteration(
+                projection.view_mut(),
+                quantizers.view_mut(),
+                instances.view(),
+            );
         }
 
         PQ {
             projection: Some(projection),
-            quantizers: centroids,
-            quantizer_len: instances.cols(),
+            quantizers,
         }
     }
 }
@@ -151,7 +164,7 @@ impl OPQ {
 
     fn train_iteration<A>(
         mut projection: ArrayViewMut2<A>,
-        centroids: &mut [Array2<A>],
+        mut centroids: ArrayViewMut3<A>,
         instances: ArrayView2<A>,
     ) where
         A: Lapack + NdFloat + Scalar + Sum,
@@ -162,15 +175,16 @@ impl OPQ {
 
         // Perform one iteration of cluster updates, using regular k-means.
         let rx = instances.dot(&projection);
-        Self::update_subquantizers(centroids, rx.view());
+        Self::update_subquantizers(centroids.view_mut(), rx.view());
 
         info!("Updating projection matrix");
 
         // Do a quantization -> reconstruction roundtrip. We recycle the
         // projection matrix to avoid (re)allocations.
-        let quantized = quantize_batch::<_, usize, _>(centroids, instances.cols(), rx.view());
+        let quantized =
+            quantize_batch::<_, usize, _>(centroids.view(), instances.cols(), rx.view());
         let mut reconstructed = rx;
-        reconstruct_batch_into(centroids, quantized, reconstructed.view_mut());
+        reconstruct_batch_into(centroids.view(), quantized, reconstructed.view_mut());
 
         // Find the new projection matrix using the instances and their
         // (projected) reconstructions. See (the text below) Eq 7 in
@@ -179,7 +193,7 @@ impl OPQ {
         projection.assign(&u.unwrap().dot(&vt.unwrap()));
     }
 
-    fn update_subquantizers<A, S>(centroids: &mut [Array2<A>], instances: ArrayBase<S, Ix2>)
+    fn update_subquantizers<A, S>(mut centroids: ArrayViewMut3<A>, instances: ArrayBase<S, Ix2>)
     where
         A: NdFloat + Scalar + Sum,
         A::Real: NdFloat,
@@ -187,9 +201,10 @@ impl OPQ {
         S: Sync + Data<Elem = A>,
     {
         centroids
+            .axis_iter_mut(Axis(0))
             .into_par_iter()
             .enumerate()
-            .for_each(|(sq, sq_centroids)| {
+            .for_each(|(sq, mut sq_centroids)| {
                 let offset = sq * sq_centroids.cols();
                 // ndarray#474
                 #[allow(clippy::deref_addrof)]

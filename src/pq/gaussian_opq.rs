@@ -5,7 +5,7 @@ use ndarray_linalg::{lapack::Lapack, types::Scalar};
 use num_traits::AsPrimitive;
 use rand::{RngCore, SeedableRng};
 
-use super::{ReconstructVector, TrainPQ, OPQ, PQ};
+use super::{TrainPQ, OPQ, PQ};
 
 /// Optimized product quantizer for Gaussian variables (Ge et al., 2013).
 ///
@@ -61,7 +61,6 @@ where
 
         PQ {
             projection: Some(projection),
-            quantizer_len: pq.reconstructed_len(),
             quantizers: pq.quantizers,
         }
     }
@@ -72,10 +71,10 @@ mod tests {
     use ndarray::{Array2, ArrayView2};
     use rand::distributions::Uniform;
 
-    use super::{GaussianOPQ, ReconstructVector};
+    use super::GaussianOPQ;
     use crate::linalg::EuclideanDistance;
     use crate::ndarray_rand::RandomExt;
-    use crate::pq::{QuantizeVector, TrainPQ, PQ};
+    use crate::pq::{QuantizeVector, ReconstructVector, TrainPQ, PQ};
 
     /// Calculate the average euclidean distances between the the given
     /// instances and the instances returned by quantizing and then
