@@ -401,18 +401,12 @@ where
         "Quantization length does not match number of subquantizers"
     );
 
-    let mut reconstruction = Array1::zeros((quantizers.len() * quantizers[0].cols(),));
-
-    let mut offset = 0;
+    let mut reconstruction = Vec::with_capacity(quantizers.len() * quantizers[0].cols());
     for (&centroid, quantizer) in quantized.into_iter().zip(quantizers.iter()) {
-        // ndarray#474
-        #[allow(clippy::deref_addrof)]
-        let mut sub_vec = reconstruction.slice_mut(s![offset..offset + quantizer.cols()]);
-        sub_vec.assign(&quantizer.index_axis(Axis(0), centroid.as_()));
-        offset += quantizer.cols();
+        reconstruction.extend(quantizer.index_axis(Axis(0), centroid.as_()));
     }
 
-    reconstruction
+    Array1::from_vec(reconstruction)
 }
 
 fn reconstruct_batch<A, I, S>(quantizers: &[Array2<A>], quantized: ArrayBase<S, Ix2>) -> Array2<A>
