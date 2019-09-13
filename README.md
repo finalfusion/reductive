@@ -4,36 +4,27 @@
 
 Training of *optimized* product quantizers requires a LAPACK
 implementation. For this reason, training of the `OPQ` and
-`GaussianOPQ` quantized is feature-gated by the `opq-train` feature.
-Without the the `opq-train` feature, you can train the `PQ` quantizer
-and use pre-trained quantizers.
-
-If you use the `opq-train` feature, you also have to select a
-BLAS/LAPACK implementation. The supported implementations are:
+`GaussianOPQ` quantizers is feature-gated by the `opq-train` feature.
+`opq-train` is automatically enabled by selecting a BLAS/LAPACK
+implementation. The supported implementations are:
 
 * OpenBLAS (feature: `openblas`)
 * Netlib (feature: `netlib`)
 * Intel MKL (feature: `intel-mk;`)
 
-There is a feature for macOS Accelerate (`accelerate`). However,
-Accelerate does not currently provide the necessary LAPACK
-routines. This feature is present in case Accelerate adds the
-necessary routines.
-
-The `opq-train` feature and a backend can be enabled as follows:
+A backend can be selected as follows:
 
 ~~~toml
 [dependencies]
-reductive = { version = "0.1", features = ["opq-train", "openblas"] }
+reductive = { version = "0.3", features = ["openblas"] }
 ~~~
 
 ### Running tests
 
-To run *all* tests, enable the `opq-train` feature and specify the
-BLAS/LAPACK implementation:
+To run *all* tests, specify the BLAS/LAPACK implementation:
 
 ~~~shell
-$ cargo test --verbose --features "opq-train openblas"
+$ cargo test --verbose --features "openblas"
 ~~~
 
 ### Multi-threaded OpenBLAS
