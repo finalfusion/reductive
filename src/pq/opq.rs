@@ -22,7 +22,7 @@ use rayon::prelude::*;
 use crate::kmeans::KMeansIteration;
 use crate::linalg::Covariance;
 
-use super::pq::{quantize_batch, reconstruct_batch_into};
+use super::primitives;
 use super::{TrainPQ, PQ};
 
 /// Optimized product quantizer (Ge et al., 2013).
@@ -181,10 +181,9 @@ impl OPQ {
 
         // Do a quantization -> reconstruction roundtrip. We recycle the
         // projection matrix to avoid (re)allocations.
-        let quantized =
-            quantize_batch::<_, usize, _>(centroids.view(), instances.cols(), rx.view());
+        let quantized = primitives::quantize_batch::<_, usize, _>(centroids.view(), rx.view());
         let mut reconstructed = rx;
-        reconstruct_batch_into(centroids.view(), quantized, reconstructed.view_mut());
+        primitives::reconstruct_batch_into(centroids.view(), quantized, reconstructed.view_mut());
 
         // Find the new projection matrix using the instances and their
         // (projected) reconstructions. See (the text below) Eq 7 in

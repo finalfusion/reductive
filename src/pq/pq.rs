@@ -3,18 +3,18 @@ use std::iter::Sum;
 
 use log::info;
 use ndarray::{
-    azip, s, stack, Array1, Array2, Array3, ArrayBase, ArrayView2, ArrayView3, ArrayViewMut2, Axis,
-    Data, Ix1, Ix2, NdFloat,
+    s, stack, Array1, Array2, Array3, ArrayBase, ArrayView2, ArrayView3, ArrayViewMut2, Axis, Data,
+    Ix1, Ix2, NdFloat,
 };
 use num_traits::{AsPrimitive, Bounded, Zero};
 use ordered_float::OrderedFloat;
 use rand::{Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 
+use super::primitives;
 use super::{QuantizeVector, ReconstructVector, TrainPQ};
 use crate::kmeans::{
-    cluster_assignment, cluster_assignments, InitialCentroids, KMeansWithCentroids,
-    NIterationsCondition, RandomInstanceCentroids,
+    InitialCentroids, KMeansWithCentroids, NIterationsCondition, RandomInstanceCentroids,
 };
 use crate::rng::ReseedOnCloneRng;
 
@@ -40,16 +40,16 @@ where
             "Attempted to construct a product quantizer without quantizers."
         );
 
-        let quantizer_len = quantizers.len_of(Axis(0)) * quantizers.len_of(Axis(2));
+        let reconstructed_len = primitives::reconstructed_len(quantizers.view());
 
         if let Some(ref projection) = projection {
             assert_eq!(
                 projection.shape(),
-                [quantizer_len; 2],
+                [reconstructed_len; 2],
                 "Incorrect projection matrix shape, was: {:?}, should be [{}, {}]",
                 projection.shape(),
-                quantizer_len,
-                quantizer_len
+                reconstructed_len,
+                reconstructed_len
             );
         }
 
@@ -250,12 +250,26 @@ where
         S: Data<Elem = A>,
         usize: AsPrimitive<I>,
     {
+        let mut quantized = Array2::zeros((x.rows(), self.quantized_len()));
+        self.quantize_batch_into(x, quantized.view_mut());
+        quantized
+    }
+
+    /// Quantize a batch of vectors into an existing matrix.
+    fn quantize_batch_into<I, S>(&self, x: ArrayBase<S, Ix2>, mut quantized: ArrayViewMut2<I>)
+    where
+        I: AsPrimitive<usize> + Bounded + Zero,
+        S: Data<Elem = A>,
+        usize: AsPrimitive<I>,
+    {
         match self.projection {
             Some(ref projection) => {
                 let rx = x.dot(projection);
-                quantize_batch(self.quantizers.view(), self.reconstructed_len(), rx)
+                primitives::quantize_batch_into(self.quantizers.view(), rx, quantized.view_mut());
             }
-            None => quantize_batch(self.quantizers.view(), self.reconstructed_len(), x),
+            None => {
+                primitives::quantize_batch_into(self.quantizers.view(), x, quantized.view_mut());
+            }
         }
     }
 
@@ -268,9 +282,9 @@ where
         match self.projection {
             Some(ref projection) => {
                 let rx = x.dot(projection);
-                quantize(self.quantizers.view(), self.reconstructed_len(), rx)
+                primitives::quantize(self.quantizers.view(), self.reconstructed_len(), rx)
             }
-            None => quantize(self.quantizers.view(), self.reconstructed_len(), x),
+            None => primitives::quantize(self.quantizers.view(), self.reconstructed_len(), x),
         }
     }
 
@@ -288,10 +302,28 @@ where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>,
     {
-        let reconstruction = reconstruct_batch(self.quantizers.view(), quantized);
-        match self.projection {
-            Some(ref projection) => reconstruction.dot(&projection.t()),
-            None => reconstruction,
+        let mut reconstructions = Array2::zeros((quantized.rows(), self.reconstructed_len()));
+        self.reconstruct_batch_into(quantized, reconstructions.view_mut());
+        reconstructions
+    }
+
+    fn reconstruct_batch_into<I, S>(
+        &self,
+        quantized: ArrayBase<S, Ix2>,
+        mut reconstructions: ArrayViewMut2<A>,
+    ) where
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>,
+    {
+        primitives::reconstruct_batch_into(
+            self.quantizers.view(),
+            quantized,
+            reconstructions.view_mut(),
+        );
+
+        if let Some(ref projection) = self.projection {
+            let projected_reconstruction = reconstructions.dot(&projection.t());
+            reconstructions.assign(&projected_reconstruction);
         }
     }
 
@@ -300,7 +332,7 @@ where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>,
     {
-        let reconstruction = reconstruct(self.quantizers.view(), quantized);
+        let reconstruction = primitives::reconstruct(self.quantizers.view(), quantized);
         match self.projection {
             Some(ref projection) => reconstruction.dot(&projection.t()),
             None => reconstruction,
@@ -308,139 +340,7 @@ where
     }
 
     fn reconstructed_len(&self) -> usize {
-        self.quantizers.len_of(Axis(0)) * self.quantizers.len_of(Axis(2))
-    }
-}
-
-fn quantize<A, I, S>(
-    quantizers: ArrayView3<A>,
-    quantizer_len: usize,
-    x: ArrayBase<S, Ix1>,
-) -> Array1<I>
-where
-    A: NdFloat + Sum,
-    I: 'static + AsPrimitive<usize> + Bounded + Copy + Zero,
-    S: Data<Elem = A>,
-    usize: AsPrimitive<I>,
-{
-    assert_eq!(
-        quantizer_len,
-        x.len(),
-        "Quantizer and vector length mismatch"
-    );
-
-    assert!(
-        quantizers.len_of(Axis(1)) - 1 <= I::max_value().as_(),
-        "Cannot store centroids in quantizer index type"
-    );
-
-    let mut indices = Array1::zeros(quantizers.len_of(Axis(0)));
-
-    let mut offset = 0;
-    for (quantizer, index) in quantizers.outer_iter().zip(indices.iter_mut()) {
-        // ndarray#474
-        #[allow(clippy::deref_addrof)]
-        let sub_vec = x.slice(s![offset..offset + quantizer.cols()]);
-        *index = cluster_assignment(quantizer.view(), sub_vec).as_();
-
-        offset += quantizer.cols();
-    }
-
-    indices
-}
-
-pub(crate) fn quantize_batch<A, I, S>(
-    quantizers: ArrayView3<A>,
-    quantizer_len: usize,
-    x: ArrayBase<S, Ix2>,
-) -> Array2<I>
-where
-    A: NdFloat + Sum,
-    I: 'static + AsPrimitive<usize> + Bounded + Copy + Zero,
-    S: Data<Elem = A>,
-    usize: AsPrimitive<I>,
-{
-    assert_eq!(
-        quantizer_len,
-        x.cols(),
-        "Quantizer and vector length mismatch"
-    );
-
-    let mut quantized = Array2::zeros((x.rows(), quantizers.len_of(Axis(0))));
-
-    let mut offset = 0;
-    for (quantizer, mut quantized) in quantizers
-        .outer_iter()
-        .zip(quantized.axis_iter_mut(Axis(1)))
-    {
-        // ndarray#474
-        #[allow(clippy::deref_addrof)]
-        let sub_matrix = x.slice(s![.., offset..offset + quantizer.cols()]);
-        let assignments = cluster_assignments(quantizer.view(), sub_matrix, Axis(0));
-        azip!(mut quantized, assignments in { *quantized = assignments.as_() });
-
-        offset += quantizer.cols();
-    }
-
-    quantized
-}
-
-fn reconstruct<A, I, S>(quantizers: ArrayView3<A>, quantized: ArrayBase<S, Ix1>) -> Array1<A>
-where
-    A: NdFloat,
-    I: AsPrimitive<usize>,
-    S: Data<Elem = I>,
-{
-    assert_eq!(
-        quantizers.len_of(Axis(0)),
-        quantized.len(),
-        "Quantization length does not match number of subquantizers"
-    );
-
-    let mut reconstruction =
-        Vec::with_capacity(quantizers.len_of(Axis(0)) * quantizers.len_of(Axis(2)));
-    for (&centroid, quantizer) in quantized.into_iter().zip(quantizers.outer_iter()) {
-        reconstruction.extend(quantizer.index_axis(Axis(0), centroid.as_()));
-    }
-
-    Array1::from_vec(reconstruction)
-}
-
-fn reconstruct_batch<A, I, S>(quantizers: ArrayView3<A>, quantized: ArrayBase<S, Ix2>) -> Array2<A>
-where
-    A: NdFloat,
-    I: AsPrimitive<usize>,
-    S: Data<Elem = I>,
-{
-    let mut reconstructions = Array2::zeros((
-        quantized.rows(),
-        quantizers.len_of(Axis(0)) * quantizers.len_of(Axis(2)),
-    ));
-
-    reconstruct_batch_into(quantizers, quantized, reconstructions.view_mut());
-
-    reconstructions
-}
-
-pub(crate) fn reconstruct_batch_into<A, I, S>(
-    quantizers: ArrayView3<A>,
-    quantized: ArrayBase<S, Ix2>,
-    mut reconstructions: ArrayViewMut2<A>,
-) where
-    A: NdFloat,
-    I: AsPrimitive<usize>,
-    S: Data<Elem = I>,
-{
-    assert_eq!(
-        quantizers.len_of(Axis(0)),
-        quantized.cols(),
-        "Quantization length does not match number of subquantizers"
-    );
-
-    for (quantized, mut reconstruction) in
-        quantized.outer_iter().zip(reconstructions.outer_iter_mut())
-    {
-        reconstruction.assign(&reconstruct(quantizers, quantized));
+        primitives::reconstructed_len(self.quantizers.view())
     }
 }
 
