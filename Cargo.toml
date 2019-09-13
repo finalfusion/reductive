@@ -6,8 +6,8 @@ authors = ["Daniël de Kok <me@danieldk.eu>"]
 license = "Apache-2.0"
 description = "Optimized vector quantization for dense vectors"
 documentation = "https://docs.rs/reductive/"
-homepage = "https://git.sr.ht/~danieldk/reductive"
-repository = "https://git.sr.ht/~danieldk/reductive"
+homepage = "https://github.com/finalfusion/reductive"
+repository = "https://github.com/finalfusion/reductive"
 
 [dependencies]
 ndarray = "0.12"
