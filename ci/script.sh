@@ -10,5 +10,5 @@ fi
 
 cargo build --verbose
 cargo test --verbose
-cargo build --verbose --features "opq-train openblas"
-cargo test --verbose --features "opq-train openblas"
+cargo build --verbose --features "openblas"
+cargo test --verbose --features "openblas"
