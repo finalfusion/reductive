@@ -1,4 +1,4 @@
-use ndarray::{Array1, Array2, ArrayBase, Data, Ix1, Ix2};
+use ndarray::{Array1, Array2, ArrayBase, ArrayViewMut2, Data, Ix1, Ix2};
 use num_traits::{AsPrimitive, Bounded, Zero};
 use rand::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
@@ -69,6 +69,13 @@ pub trait QuantizeVector<A> {
         S: Data<Elem = A>,
         usize: AsPrimitive<I>;
 
+    /// Quantize a batch of vectors into an existing matrix.
+    fn quantize_batch_into<I, S>(&self, x: ArrayBase<S, Ix2>, quantized: ArrayViewMut2<I>)
+    where
+        I: AsPrimitive<usize> + Bounded + Zero,
+        S: Data<Elem = A>,
+        usize: AsPrimitive<I>;
+
     /// Quantize a vector.
     fn quantize_vector<I, S>(&self, x: ArrayBase<S, Ix1>) -> Array1<I>
     where
@@ -82,11 +89,22 @@ pub trait QuantizeVector<A> {
 
 /// Vector reconstruction.
 pub trait ReconstructVector<A> {
-    /// Reconstruct a vector.
+    /// Reconstruct a batch of vectors.
     ///
     /// The vectors are reconstructed from the quantization indices.
     fn reconstruct_batch<I, S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
     where
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>;
+
+    /// Reconstruct a batch of vectors into an existing matrix.
+    ///
+    /// The vectors are reconstructed from the quantization indices.
+    fn reconstruct_batch_into<I, S>(
+        &self,
+        quantized: ArrayBase<S, Ix2>,
+        reconstructions: ArrayViewMut2<A>,
+    ) where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>;
 

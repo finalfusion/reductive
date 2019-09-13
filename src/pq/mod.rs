@@ -10,6 +10,8 @@ mod opq;
 #[cfg(feature = "opq-train")]
 pub use self::opq::OPQ;
 
+pub(crate) mod primitives;
+
 #[allow(clippy::module_inception)]
 mod pq;
 pub use self::pq::PQ;
