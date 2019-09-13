@@ -27,7 +27,7 @@ rand_distr = "0.2"
 
 [features]
 default    = []
-opq-train  = ["ndarray-linalg"]
-intel-mkl  = ["ndarray-linalg/intel-mkl"]
-netlib     = ["ndarray-linalg/netlib"]
-openblas   = ["ndarray-linalg/openblas"]
+opq-train  = []
+intel-mkl  = ["opq-train", "ndarray-linalg/intel-mkl"]
+netlib     = ["opq-train", "ndarray-linalg/netlib"]
+openblas   = ["opq-train", "ndarray-linalg/openblas"]
