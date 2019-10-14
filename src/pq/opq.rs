@@ -13,7 +13,6 @@ use ndarray_linalg::{
     svd::SVD,
     types::Scalar,
 };
-use ndarray_parallel::NdarrayIntoParallelIterator;
 use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 use rand::{Rng, RngCore};
@@ -115,8 +114,8 @@ impl OPQ {
     {
         info!(
             "Creating projection matrix ({} instances, {} dimensions, {} subquantizers)",
-            instances.rows(),
-            instances.cols(),
+            instances.nrows(),
+            instances.ncols(),
             n_subquantizers
         );
 
@@ -204,10 +203,10 @@ impl OPQ {
             .into_par_iter()
             .enumerate()
             .for_each(|(sq, mut sq_centroids)| {
-                let offset = sq * sq_centroids.cols();
+                let offset = sq * sq_centroids.ncols();
                 // ndarray#474
                 #[allow(clippy::deref_addrof)]
-                let sq_instances = instances.slice(s![.., offset..offset + sq_centroids.cols()]);
+                let sq_instances = instances.slice(s![.., offset..offset + sq_centroids.ncols()]);
                 sq_instances.kmeans_iteration(Axis(0), sq_centroids.view_mut());
             });
     }
@@ -299,7 +298,7 @@ mod tests {
             euclidean_loss += instance.euclidean_distance(reconstruction);
         }
 
-        euclidean_loss / instances.rows() as f32
+        euclidean_loss / instances.nrows() as f32
     }
 
     #[test]

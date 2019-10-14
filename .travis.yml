@@ -6,7 +6,7 @@ addons:
       - gfortran
 sudo: required
 rust:
-  - 1.32.0
+  - 1.37.0
   - stable
 before_script:
   - rustup component add clippy

@@ -89,7 +89,7 @@ mod tests {
             euclidean_loss += instance.euclidean_distance(reconstruction);
         }
 
-        euclidean_loss / instances.rows() as f32
+        euclidean_loss / instances.nrows() as f32
     }
 
     #[test]

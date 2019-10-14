@@ -3,7 +3,7 @@ use std::iter::Sum;
 #[cfg(feature = "opq-train")]
 use ndarray::Array2;
 use ndarray::{
-    azip, s, Array1, ArrayBase, ArrayView3, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat,
+    s, Array1, ArrayBase, ArrayView3, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat, Zip,
 };
 
 use num_traits::{AsPrimitive, Bounded, Zero};
@@ -38,10 +38,10 @@ where
     for (quantizer, index) in quantizers.outer_iter().zip(indices.iter_mut()) {
         // ndarray#474
         #[allow(clippy::deref_addrof)]
-        let sub_vec = x.slice(s![offset..offset + quantizer.cols()]);
+        let sub_vec = x.slice(s![offset..offset + quantizer.ncols()]);
         *index = cluster_assignment(quantizer.view(), sub_vec).as_();
 
-        offset += quantizer.cols();
+        offset += quantizer.ncols();
     }
 
     indices
@@ -55,7 +55,7 @@ where
     S: Data<Elem = A>,
     usize: AsPrimitive<I>,
 {
-    let mut quantized = Array2::zeros((x.rows(), quantizers.len_of(Axis(0))));
+    let mut quantized = Array2::zeros((x.nrows(), quantizers.len_of(Axis(0))));
     quantize_batch_into(quantizers, x, quantized.view_mut());
     quantized
 }
@@ -72,17 +72,17 @@ pub fn quantize_batch_into<A, I, S>(
 {
     assert_eq!(
         reconstructed_len(quantizers.view()),
-        x.cols(),
+        x.ncols(),
         "Quantizer and vector length mismatch"
     );
 
     assert!(
-        quantized.rows() == x.rows() && quantized.cols() == quantizers.len_of(Axis(0)),
+        quantized.nrows() == x.nrows() && quantized.ncols() == quantizers.len_of(Axis(0)),
         "Quantized matrix has incorrect shape, expected: ({}, {}), got: ({}, {})",
-        x.rows(),
+        x.nrows(),
         quantizers.len_of(Axis(0)),
-        quantized.rows(),
-        quantized.cols()
+        quantized.nrows(),
+        quantized.ncols()
     );
 
     let mut offset = 0;
@@ -92,11 +92,13 @@ pub fn quantize_batch_into<A, I, S>(
     {
         // ndarray#474
         #[allow(clippy::deref_addrof)]
-        let sub_matrix = x.slice(s![.., offset..offset + quantizer.cols()]);
+        let sub_matrix = x.slice(s![.., offset..offset + quantizer.ncols()]);
         let assignments = cluster_assignments(quantizer.view(), sub_matrix, Axis(0));
-        azip!(mut quantized, assignments in { *quantized = assignments.as_() });
+        Zip::from(&mut quantized)
+            .and(&assignments)
+            .apply(|quantized, assignment| *quantized = assignment.as_());
 
-        offset += quantizer.cols();
+        offset += quantizer.ncols();
     }
 }
 
@@ -121,7 +123,7 @@ where
         reconstruct.extend(quantizer.index_axis(Axis(0), centroid.as_()));
     }
 
-    Array1::from_vec(reconstruct)
+    Array1::from(reconstruct)
 }
 
 pub fn reconstruct_batch_into<A, I, S>(
@@ -134,13 +136,13 @@ pub fn reconstruct_batch_into<A, I, S>(
     S: Data<Elem = I>,
 {
     assert!(
-        reconstructions.rows() == quantized.rows()
-            && reconstructions.cols() == reconstructed_len(quantizers.view()),
+        reconstructions.nrows() == quantized.nrows()
+            && reconstructions.ncols() == reconstructed_len(quantizers.view()),
         "Reconstructions matrix has incorrect shape, expected: ({}, {}), got: ({}, {})",
-        quantized.rows(),
+        quantized.nrows(),
         reconstructed_len(quantizers.view()),
-        reconstructions.rows(),
-        reconstructions.cols()
+        reconstructions.nrows(),
+        reconstructions.ncols()
     );
 
     for (quantized, mut reconstruction) in
