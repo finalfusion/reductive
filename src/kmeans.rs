@@ -180,7 +180,7 @@ fn update_centroids<A, S>(
 
     centroids.fill(A::zero());
 
-    let mut centroid_counts = Array1::zeros(centroids.rows());
+    let mut centroid_counts = Array1::zeros(centroids.nrows());
 
     for (instance, assignment) in data.axis_iter(instance_axis).zip(assignments.iter()) {
         let mut centroid = centroids.index_axis_mut(Axis(0), *assignment);
@@ -267,11 +267,11 @@ where
         mut stop_condition: impl StopCondition<A>,
     ) -> A {
         assert!(
-            centroids.rows() > 0,
+            centroids.nrows() > 0,
             "Cannot cluster instances with zero centroids."
         );
         assert_eq!(
-            centroids.cols(),
+            centroids.ncols(),
             self.len_of(Axis(instance_axis.index() ^ 1)),
             "Centroid and instance lengths differ."
         );
@@ -307,11 +307,11 @@ where
 {
     fn kmeans_iteration(&self, instance_axis: Axis, mut centroids: ArrayViewMut2<A>) -> A {
         assert!(
-            centroids.rows() > 0,
+            centroids.nrows() > 0,
             "Cannot cluster instances with zero centroids."
         );
         assert_eq!(
-            centroids.cols(),
+            centroids.ncols(),
             self.len_of(Axis(instance_axis.index() ^ 1)),
             "Centroid and instance lengths differ."
         );

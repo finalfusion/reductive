@@ -1,7 +1,7 @@
 //! Various linear algebra utility traits.
 
 use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, NdFloat};
-use num_traits::AsPrimitive;
+use num_traits::{AsPrimitive, FromPrimitive};
 
 /// Trait for computing covariance matrices.
 pub trait Covariance<A> {
@@ -17,12 +17,17 @@ pub trait Covariance<A> {
 impl<S, A> Covariance<A> for ArrayBase<S, Ix2>
 where
     S: Data<Elem = A>,
-    A: NdFloat,
+    A: FromPrimitive + NdFloat,
     usize: AsPrimitive<A>,
 {
     fn covariance(self, observation_axis: Axis) -> Array2<A> {
+        assert!(
+            self.len_of(observation_axis) != 0,
+            "Cannot compute a covariance from zero observations"
+        );
+
         // Center the data
-        let means = self.mean_axis(observation_axis);
+        let means = self.mean_axis(observation_axis).unwrap();
         let mut centered = self.to_owned();
         centered
             .axis_iter_mut(observation_axis)
@@ -122,7 +127,7 @@ where
     {
         assert_eq!(
             self.len(),
-            other.cols(),
+            other.ncols(),
             "Cannot compute (squared) euclidean distance when the number of vector components and matrix columns differ."
         );
 
@@ -153,8 +158,8 @@ where
         S2: Data<Elem = A>,
     {
         assert_eq!(
-            self.cols(),
-            other.cols(),
+            self.ncols(),
+            other.ncols(),
             "Cannot compute (squared) euclidean distance of matrices with different numbers of columns."
         );
 
@@ -162,8 +167,8 @@ where
         let other_sqn: Array1<_> = other.outer_iter().map(|r| r.dot(&r)).collect();
 
         let mut distances = self.dot(&other.t());
-        for i in 0..distances.rows() {
-            for j in 0..distances.cols() {
+        for i in 0..distances.nrows() {
+            for j in 0..distances.ncols() {
                 distances[(i, j)] =
                     self_sqn[i] + other_sqn[j] - (distances[(i, j)] + distances[(i, j)]);
             }
@@ -239,6 +244,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use approx::AbsDiffEq;
     use ndarray::{array, Axis};
 
     use super::{Covariance, EuclideanDistance, SquaredEuclideanDistance};
@@ -266,14 +272,14 @@ mod tests {
         let b = array![[2., 0., 0.], [0., 2., 0.], [0., 0., 2.]];
         assert!(a
             .euclidean_distance(b)
-            .all_close(&array![14f32.sqrt(), 10f32.sqrt(), 6f32.sqrt()], 1e-6));
+            .abs_diff_eq(&array![14f32.sqrt(), 10f32.sqrt(), 6f32.sqrt()], 1e-6));
     }
 
     #[test]
     fn euclidean_distance_ix2_ix2() {
         let a = array![[1., 2., 3.], [3., 2., 1.]];
         let b = array![[2., 0., 0.], [0., 2., 0.], [0., 0., 2.]];
-        assert!(a.euclidean_distance(b).all_close(
+        assert!(a.euclidean_distance(b).abs_diff_eq(
             &array![
                 [14f32.sqrt(), 10f32.sqrt(), 6f32.sqrt()],
                 [6f32.sqrt(), 10f32.sqrt(), 14f32.sqrt()]

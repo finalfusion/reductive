@@ -67,16 +67,16 @@ where
         instances: ArrayView2<A>,
     ) {
         assert!(
-            n_subquantizers > 0 && n_subquantizers <= instances.cols(),
+            n_subquantizers > 0 && n_subquantizers <= instances.ncols(),
             "The number of subquantizers should at least be 1 and at most be {}.",
-            instances.cols()
+            instances.ncols()
         );
         assert!(
             n_subquantizer_bits > 0,
             "Number of quantizer bits should at least be one."
         );
         assert!(
-            instances.cols() % n_subquantizers == 0,
+            instances.ncols() % n_subquantizers == 0,
             "The number of subquantizers should evenly divide each instance."
         );
         assert!(
@@ -114,7 +114,7 @@ where
     where
         S: Data<Elem = A>,
     {
-        let sq_dims = instances.cols() / n_subquantizers;
+        let sq_dims = instances.ncols() / n_subquantizers;
 
         let mut random_centroids = RandomInstanceCentroids::new(rng);
 
@@ -148,7 +148,7 @@ where
 
         info!("Training PQ subquantizer {}", subquantizer_idx);
 
-        let sq_dims = instances.cols() / n_subquantizers;
+        let sq_dims = instances.ncols() / n_subquantizers;
 
         let offset = subquantizer_idx * sq_dims;
         // ndarray#474
@@ -250,7 +250,7 @@ where
         S: Data<Elem = A>,
         usize: AsPrimitive<I>,
     {
-        let mut quantized = Array2::zeros((x.rows(), self.quantized_len()));
+        let mut quantized = Array2::zeros((x.nrows(), self.quantized_len()));
         self.quantize_batch_into(x, quantized.view_mut());
         quantized
     }
@@ -302,7 +302,7 @@ where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>,
     {
-        let mut reconstructions = Array2::zeros((quantized.rows(), self.reconstructed_len()));
+        let mut reconstructions = Array2::zeros((quantized.nrows(), self.reconstructed_len()));
         self.reconstruct_batch_into(quantized, reconstructions.view_mut());
         reconstructions
     }
@@ -367,7 +367,7 @@ mod tests {
             euclidean_loss += instance.euclidean_distance(reconstruction);
         }
 
-        euclidean_loss / instances.rows() as f32
+        euclidean_loss / instances.nrows() as f32
     }
 
     fn test_vectors() -> Array2<f32> {
@@ -405,7 +405,10 @@ mod tests {
     fn quantize_batch_with_predefined_codebook() {
         let pq = test_pq();
 
-        assert_eq!(pq.quantize_batch(test_vectors()), test_quantizations());
+        assert_eq!(
+            pq.quantize_batch::<usize, _>(test_vectors()),
+            test_quantizations()
+        );
     }
 
     #[test]
@@ -416,7 +419,7 @@ mod tests {
             .outer_iter()
             .zip(test_quantizations().outer_iter())
         {
-            assert_eq!(pq.quantize_vector(vector), quantization);
+            assert_eq!(pq.quantize_vector::<usize, _>(vector), quantization);
         }
     }
 

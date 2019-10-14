@@ -10,8 +10,7 @@ homepage = "https://github.com/finalfusion/reductive"
 repository = "https://github.com/finalfusion/reductive"
 
 [dependencies]
-ndarray = "0.12"
-ndarray-parallel = "0.9"
+ndarray = { version = "0.13", features = [ "approx", "rayon" ] }
 num-traits = "0.2"
 ordered-float = "1"
 log = "0.4"
@@ -20,9 +19,10 @@ rand_core = "0.5"
 rand_xorshift = "0.2"
 rayon = "1"
 
-ndarray-linalg = { version = "0.11", optional = true }
+ndarray-linalg = { version = "0.12", optional = true }
 
 [dev-dependencies]
+approx = "*" # Use whatever version ndarray requires.
 rand_distr = "0.2"
 
 [features]
