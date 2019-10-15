@@ -22,7 +22,7 @@ rayon = "1"
 ndarray-linalg = { version = "0.12", optional = true }
 
 [dev-dependencies]
-approx = "*" # Use whatever version ndarray requires.
+approx = "0.3"
 rand_distr = "0.2"
 
 [features]
