@@ -21,13 +21,16 @@ rayon = "1"
 
 ndarray-linalg = { version = "0.12", optional = true }
 
+[dependencies.openblas-src]
+version = "0.9"
+optional = true
+features = ["system"]
+
 [dev-dependencies]
 approx = "*" # Use whatever version ndarray requires.
 rand_distr = "0.2"
 
 [features]
 default    = []
-opq-train  = []
-intel-mkl  = ["opq-train", "ndarray-linalg/intel-mkl"]
-netlib     = ["opq-train", "ndarray-linalg/netlib"]
-openblas   = ["opq-train", "ndarray-linalg/openblas"]
+opq-train  = ["ndarray-linalg"]
+openblas-test = ["opq-train", "openblas-src", "ndarray-linalg/openblas"]
