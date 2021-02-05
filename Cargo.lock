@@ -10,6 +10,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "approx"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f2a05fd1bd10b2527e20a2cd32d8873d115b8b39fe219ee25f42a8aca6ba278"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -42,7 +51,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c505375a294ec7cf79430c4ccb91ee1fab5f6390da3a264932fd303832a2de7"
 dependencies = [
- "num-complex",
+ "num-complex 0.2.4",
  "num-traits",
  "rand 0.5.6",
  "serde",
@@ -168,7 +177,7 @@ checksum = "4bce9d3464fe3be72376bcbe3dc4df22dd368ca228b62e8415d2c7b09bb58677"
 dependencies = [
  "lapacke-sys",
  "libc",
- "num-complex",
+ "num-complex 0.2.4",
 ]
 
 [[package]]
@@ -231,11 +240,25 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac06db03ec2f46ee0ecdca1a1c34a99c0d188a0d83439b84bf0cb4b386e4ab09"
 dependencies = [
- "approx",
+ "approx 0.3.2",
  "blas-src 0.2.1",
  "cblas-sys",
  "matrixmultiply",
- "num-complex",
+ "num-complex 0.2.4",
+ "num-integer",
+ "num-traits",
+ "rawpointer",
+]
+
+[[package]]
+name = "ndarray"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c0d5c9540a691d153064dc47a4db2504587a75eae07bf1d73f7a596ebc73c04"
+dependencies = [
+ "approx 0.4.0",
+ "matrixmultiply",
+ "num-complex 0.3.1",
  "num-integer",
  "num-traits",
  "rawpointer",
@@ -252,8 +275,8 @@ dependencies = [
  "cauchy",
  "lapack-src",
  "lapacke",
- "ndarray",
- "num-complex",
+ "ndarray 0.13.1",
+ "num-complex 0.2.4",
  "num-traits",
  "rand 0.5.6",
 ]
@@ -268,6 +291,15 @@ dependencies = [
  "num-traits",
  "rand 0.5.6",
  "serde",
+]
+
+[[package]]
+name = "num-complex"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "747d632c0c558b87dbabbe6a82f3b4ae03720d0646ac5b7b4dae89394be5f2c5"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]
@@ -451,9 +483,9 @@ dependencies = [
 name = "reductive"
 version = "0.5.0"
 dependencies = [
- "approx",
+ "approx 0.3.2",
  "log",
- "ndarray",
+ "ndarray 0.14.0",
  "ndarray-linalg",
  "num-traits",
  "openblas-src",

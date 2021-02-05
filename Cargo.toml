@@ -10,7 +10,7 @@ homepage = "https://github.com/finalfusion/reductive"
 repository = "https://github.com/finalfusion/reductive"
 
 [dependencies]
-ndarray = { version = "0.13", features = [ "approx", "rayon" ] }
+ndarray = { version = "0.14", features = [ "approx", "rayon" ] }
 num-traits = "0.2"
 ordered-float = "2"
 log = "0.4"
