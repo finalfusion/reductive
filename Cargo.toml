@@ -28,7 +28,7 @@ features = ["system"]
 
 [dev-dependencies]
 approx = "0.3"
-rand_distr = "0.2"
+rand_distr = "0.4"
 
 [features]
 default    = []
