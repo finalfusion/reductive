@@ -14,7 +14,7 @@ ndarray = { version = "0.13", features = [ "approx", "rayon" ] }
 num-traits = "0.2"
 ordered-float = "2"
 log = "0.4"
-rand = { version = "0.7", features = [ "small_rng" ] }
+rand = { version = "0.8", features = [ "small_rng" ] }
 rand_core = "0.5"
 rand_xorshift = "0.2"
 rayon = "1"
