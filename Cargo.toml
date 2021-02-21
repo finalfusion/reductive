@@ -19,13 +19,8 @@ rand_core = "0.6"
 rand_xorshift = "0.3"
 rayon = "1"
 
-ndarray-linalg = { version = "0.13", optional = true }
 lax = { version = "0.1", optional = true }
-
-[dependencies.openblas-src]
-version = "0.10"
-optional = true
-features = ["system"]
+ndarray-linalg = { version = "0.13", optional = true }
 
 [dev-dependencies]
 approx = "0.4"
@@ -34,4 +29,4 @@ rand_distr = "0.4"
 [features]
 default    = []
 opq-train  = ["lax", "ndarray-linalg"]
-openblas-test = ["opq-train", "openblas-src", "ndarray-linalg/openblas-system"]
+openblas-test = ["opq-train", "ndarray-linalg/openblas"]

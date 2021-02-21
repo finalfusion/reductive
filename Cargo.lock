@@ -561,7 +561,6 @@ dependencies = [
  "ndarray",
  "ndarray-linalg",
  "num-traits",
- "openblas-src",
  "ordered-float",
  "rand 0.8.3",
  "rand_core 0.6.2",
