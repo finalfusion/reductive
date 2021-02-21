@@ -92,6 +92,7 @@ where
 {
     type Output = A;
 
+    #[allow(clippy::suspicious_operation_groupings)]
     fn squared_euclidean_distance<S2>(&self, other: ArrayBase<S2, Ix1>) -> A
     where
         S2: Data<Elem = A>,
