@@ -3,8 +3,8 @@ use std::iter::Sum;
 
 use log::info;
 use ndarray::{
-    s, stack, Array1, Array2, Array3, ArrayBase, ArrayView2, ArrayView3, ArrayViewMut2, Axis, Data,
-    Ix1, Ix2, NdFloat,
+    concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, ArrayView3, ArrayViewMut2, Axis,
+    Data, Ix1, Ix2, NdFloat,
 };
 use num_traits::{AsPrimitive, Bounded, Zero};
 use ordered_float::OrderedFloat;
@@ -235,7 +235,7 @@ where
 
         PQ {
             projection: None,
-            quantizers: stack(Axis(0), &views).expect("Cannot stack subquantizers"),
+            quantizers: concatenate(Axis(0), &views).expect("Cannot concatenate subquantizers"),
         }
     }
 }

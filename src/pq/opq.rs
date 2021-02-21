@@ -2,17 +2,13 @@
 
 use std::iter::Sum;
 
+use lax::{Lapack, UPLO};
 use log::info;
 use ndarray::{
-    s, stack, Array2, ArrayBase, ArrayView2, ArrayViewMut2, ArrayViewMut3, Axis, Data, Ix1, Ix2,
-    NdFloat,
+    concatenate, s, Array2, ArrayBase, ArrayView2, ArrayViewMut2, ArrayViewMut3, Axis, Data, Ix1,
+    Ix2, NdFloat,
 };
-use ndarray_linalg::{
-    eigh::Eigh,
-    lapack::{Lapack, UPLO},
-    svd::SVD,
-    types::Scalar,
-};
+use ndarray_linalg::{eigh::Eigh, svd::SVD, types::Scalar};
 use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 use rand::{Rng, RngCore};
@@ -83,7 +79,8 @@ where
             .iter()
             .map(|c| c.view().insert_axis(Axis(0)))
             .collect::<Vec<_>>();
-        let mut quantizers = stack(Axis(0), &views).expect("Cannot stack subquantizers");
+        let mut quantizers =
+            concatenate(Axis(0), &views).expect("Cannot concatenate subquantizers");
 
         // Iteratively refine the clusters and the projection matrix.
         for i in 0..n_iterations {
