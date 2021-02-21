@@ -361,7 +361,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{array, stack, Array2, ArrayBase, Axis, Data, Ix2};
+    use ndarray::{array, concatenate, Array2, ArrayBase, Axis, Data, Ix2};
     use rand::{Rng, SeedableRng};
     use rand_distr::Normal;
     use rand_xorshift::XorShiftRng;
@@ -453,7 +453,7 @@ mod tests {
 
         let sphere_views: Vec<_> = spheres.iter().map(|s| s.view()).collect();
 
-        stack(Axis(0), &sphere_views).expect("Shapes of gaussian spheres do not match")
+        concatenate(Axis(0), &sphere_views).expect("Shapes of gaussian spheres do not match")
     }
 
     #[test]

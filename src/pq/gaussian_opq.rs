@@ -1,7 +1,8 @@
 use std::iter::Sum;
 
+use lax::Lapack;
 use ndarray::{ArrayBase, Data, Ix2, NdFloat};
-use ndarray_linalg::{lapack::Lapack, types::Scalar};
+use ndarray_linalg::types::Scalar;
 use num_traits::AsPrimitive;
 use rand::{RngCore, SeedableRng};
 
