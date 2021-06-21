@@ -276,6 +276,8 @@ where
 mod tests {
     use ndarray::{array, Array2, ArrayView2};
     use rand::distributions::Uniform;
+    use rand::SeedableRng;
+    use rand_xorshift::XorShiftRng;
 
     use super::OPQ;
     use crate::linalg::EuclideanDistance;
@@ -327,9 +329,10 @@ mod tests {
 
     #[test]
     fn quantize_with_opq() {
+        let mut rng = XorShiftRng::seed_from_u64(42);
         let uniform = Uniform::new(0f32, 1f32);
-        let instances = Array2::random((256, 20), uniform);
-        let pq = OPQ::train_pq(10, 7, 10, 1, instances.view());
+        let instances = Array2::random_using((256, 20), uniform, &mut rng);
+        let pq = OPQ::train_pq_using(10, 7, 10, 1, instances.view(), rng);
         let loss = avg_euclidean_loss(instances.view(), &pq);
         // Loss is around 0.09.
         assert!(loss < 0.1);
