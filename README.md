@@ -24,7 +24,7 @@ reductive = { version = "0.3", features = ["openblas"] }
 To run *all* tests, specify the BLAS/LAPACK implementation:
 
 ~~~shell
-$ cargo test --verbose --features "openblas"
+$ cargo test --verbose --features "openblas-test"
 ~~~
 
 ### Multi-threaded OpenBLAS
