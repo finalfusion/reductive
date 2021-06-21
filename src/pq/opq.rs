@@ -18,7 +18,7 @@ use crate::kmeans::KMeansIteration;
 use crate::linalg::Covariance;
 
 use super::primitives;
-use super::{TrainPQ, PQ};
+use super::{Pq, TrainPq};
 
 /// Optimized product quantizer (Ge et al., 2013).
 ///
@@ -37,7 +37,7 @@ use super::{TrainPQ, PQ};
 /// no effect.
 pub struct OPQ;
 
-impl<A> TrainPQ<A> for OPQ
+impl<A> TrainPq<A> for OPQ
 where
     A: Lapack + NdFloat + Scalar + Sum,
     A::Real: NdFloat,
@@ -50,12 +50,12 @@ where
         _n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         mut rng: &mut R,
-    ) -> Result<PQ<A>, rand::Error>
+    ) -> Result<Pq<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
         R: RngCore,
     {
-        PQ::check_quantizer_invariants(
+        Pq::check_quantizer_invariants(
             n_subquantizers,
             n_subquantizer_bits,
             n_iterations,
@@ -92,7 +92,7 @@ where
             );
         }
 
-        Ok(PQ {
+        Ok(Pq {
             projection: Some(projection),
             quantizers,
         })
@@ -147,7 +147,7 @@ impl OPQ {
     {
         (0..n_subquantizers)
             .map(|sq| {
-                PQ::subquantizer_initial_centroids(
+                Pq::subquantizer_initial_centroids(
                     sq,
                     n_subquantizers,
                     codebook_len,
@@ -282,12 +282,12 @@ mod tests {
     use super::OPQ;
     use crate::linalg::EuclideanDistance;
     use crate::ndarray_rand::RandomExt;
-    use crate::pq::{QuantizeVector, ReconstructVector, TrainPQ, PQ};
+    use crate::pq::{Pq, QuantizeVector, ReconstructVector, TrainPq};
 
     /// Calculate the average euclidean distances between the the given
     /// instances and the instances returned by quantizing and then
     /// reconstructing the instances.
-    fn avg_euclidean_loss(instances: ArrayView2<f32>, quantizer: &PQ<f32>) -> f32 {
+    fn avg_euclidean_loss(instances: ArrayView2<f32>, quantizer: &Pq<f32>) -> f32 {
         let mut euclidean_loss = 0f32;
 
         let quantized: Array2<u8> = quantizer.quantize_batch(instances);

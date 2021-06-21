@@ -14,7 +14,7 @@ pub(crate) mod primitives;
 
 #[allow(clippy::module_inception)]
 mod pq;
-pub use self::pq::PQ;
+pub use self::pq::Pq;
 
 mod traits;
-pub use self::traits::{QuantizeVector, ReconstructVector, TrainPQ};
+pub use self::traits::{QuantizeVector, ReconstructVector, TrainPq};

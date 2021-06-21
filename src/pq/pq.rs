@@ -12,7 +12,7 @@ use rand::{Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 
 use super::primitives;
-use super::{QuantizeVector, ReconstructVector, TrainPQ};
+use super::{QuantizeVector, ReconstructVector, TrainPq};
 use crate::kmeans::{
     InitialCentroids, KMeansWithCentroids, NIterationsCondition, RandomInstanceCentroids,
 };
@@ -25,12 +25,12 @@ use rand_xorshift::XorShiftRng;
 /// *i*-th subquantizer. Vector reconstruction consists of concatenating
 /// the centroids that represent the slices.
 #[derive(Clone, Debug, PartialEq)]
-pub struct PQ<A> {
+pub struct Pq<A> {
     pub(crate) projection: Option<Array2<A>>,
     pub(crate) quantizers: Array3<A>,
 }
 
-impl<A> PQ<A>
+impl<A> Pq<A>
 where
     A: NdFloat,
 {
@@ -53,7 +53,7 @@ where
             );
         }
 
-        PQ {
+        Pq {
             projection,
             quantizers,
         }
@@ -156,7 +156,7 @@ where
         let sq_instances = instances.slice(s![.., offset..offset + sq_dims]);
 
         iter::repeat_with(|| {
-            let mut quantizer = PQ::subquantizer_initial_centroids(
+            let mut quantizer = Pq::subquantizer_initial_centroids(
                 subquantizer_idx,
                 n_subquantizers,
                 codebook_len,
@@ -183,7 +183,7 @@ where
     }
 }
 
-impl<A> TrainPQ<A> for PQ<A>
+impl<A> TrainPq<A> for Pq<A>
 where
     A: NdFloat + Sum,
     usize: AsPrimitive<A>,
@@ -195,7 +195,7 @@ where
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         mut rng: &mut R,
-    ) -> Result<PQ<A>, rand::Error>
+    ) -> Result<Pq<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
         R: RngCore + SeedableRng + Send,
@@ -231,14 +231,14 @@ where
 
         let views = quantizers.iter().map(|a| a.view()).collect::<Vec<_>>();
 
-        Ok(PQ {
+        Ok(Pq {
             projection: None,
             quantizers: concatenate(Axis(0), &views).expect("Cannot concatenate subquantizers"),
         })
     }
 }
 
-impl<A> QuantizeVector<A> for PQ<A>
+impl<A> QuantizeVector<A> for Pq<A>
 where
     A: NdFloat + Sum,
 {
@@ -291,7 +291,7 @@ where
     }
 }
 
-impl<A> ReconstructVector<A> for PQ<A>
+impl<A> ReconstructVector<A> for Pq<A>
 where
     A: NdFloat + Sum,
 {
@@ -349,15 +349,15 @@ mod tests {
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
-    use super::PQ;
+    use super::Pq;
     use crate::linalg::EuclideanDistance;
     use crate::ndarray_rand::RandomExt;
-    use crate::pq::{QuantizeVector, ReconstructVector, TrainPQ};
+    use crate::pq::{QuantizeVector, ReconstructVector, TrainPq};
 
     /// Calculate the average euclidean distances between the the given
     /// instances and the instances returned by quantizing and then
     /// reconstructing the instances.
-    fn avg_euclidean_loss(instances: ArrayView2<f32>, quantizer: &PQ<f32>) -> f32 {
+    fn avg_euclidean_loss(instances: ArrayView2<f32>, quantizer: &Pq<f32>) -> f32 {
         let mut euclidean_loss = 0f32;
 
         let quantized: Array2<u8> = quantizer.quantize_batch(instances);
@@ -392,10 +392,10 @@ mod tests {
         ]
     }
 
-    fn test_pq() -> PQ<f32> {
+    fn test_pq() -> Pq<f32> {
         let quantizers = array![[[1., 0., 0.], [0., 1., 0.]], [[1., -1., 0.], [0., 1., 0.]],];
 
-        PQ {
+        Pq {
             projection: None,
             quantizers,
         }
@@ -428,7 +428,7 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let uniform = Uniform::new(0f32, 1f32);
         let instances = Array2::random_using((256, 20), uniform, &mut rng);
-        let pq = PQ::train_pq_using(10, 7, 10, 1, instances.view(), &mut rng).unwrap();
+        let pq = Pq::train_pq_using(10, 7, 10, 1, instances.view(), &mut rng).unwrap();
         let loss = avg_euclidean_loss(instances.view(), &pq);
         // Loss is around 0.077.
         assert!(loss < 0.08);
@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn quantize_with_type() {
         let uniform = Uniform::new(0f32, 1f32);
-        let pq = PQ {
+        let pq = Pq {
             projection: None,
             quantizers: Array3::random((1, 256, 10), uniform),
         };
@@ -448,7 +448,7 @@ mod tests {
     #[should_panic]
     fn quantize_with_too_narrow_type() {
         let uniform = Uniform::new(0f32, 1f32);
-        let pq = PQ {
+        let pq = Pq {
             projection: None,
             quantizers: Array3::random((1, 257, 10), uniform),
         };
