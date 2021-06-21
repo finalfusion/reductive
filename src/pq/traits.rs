@@ -3,13 +3,13 @@ use num_traits::{AsPrimitive, Bounded, Zero};
 use rand::{CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-use crate::pq::PQ;
+use crate::pq::Pq;
 
 /// Training triat for product quantizers.
 ///
 /// This traits specifies the training functions for product
 /// quantizers.
-pub trait TrainPQ<A> {
+pub trait TrainPq<A> {
     /// Train a product quantizer with the xorshift PRNG.
     ///
     /// Train a product quantizer with `n_subquantizers` subquantizers
@@ -23,7 +23,7 @@ pub trait TrainPQ<A> {
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-    ) -> Result<PQ<A>, rand::Error>
+    ) -> Result<Pq<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
     {
@@ -56,7 +56,7 @@ pub trait TrainPQ<A> {
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         rng: &mut R,
-    ) -> Result<PQ<A>, rand::Error>
+    ) -> Result<Pq<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
         R: CryptoRng + RngCore + SeedableRng + Send;

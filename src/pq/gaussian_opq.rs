@@ -6,7 +6,7 @@ use ndarray_linalg::types::Scalar;
 use num_traits::AsPrimitive;
 use rand::{CryptoRng, RngCore, SeedableRng};
 
-use super::{TrainPQ, OPQ, PQ};
+use super::{Pq, TrainPq, OPQ};
 
 /// Optimized product quantizer for Gaussian variables (Ge et al., 2013).
 ///
@@ -23,7 +23,7 @@ use super::{TrainPQ, OPQ, PQ};
 /// quantization.
 pub struct GaussianOPQ;
 
-impl<A> TrainPQ<A> for GaussianOPQ
+impl<A> TrainPq<A> for GaussianOPQ
 where
     A: Lapack + NdFloat + Scalar + Sum,
     A::Real: NdFloat,
@@ -36,12 +36,12 @@ where
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         rng: &mut R,
-    ) -> Result<PQ<A>, rand::Error>
+    ) -> Result<Pq<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
         R: CryptoRng + RngCore + SeedableRng + Send,
     {
-        PQ::check_quantizer_invariants(
+        Pq::check_quantizer_invariants(
             n_subquantizers,
             n_subquantizer_bits,
             n_iterations,
@@ -51,7 +51,7 @@ where
 
         let projection = OPQ::create_projection_matrix(instances.view(), n_subquantizers);
         let rx = instances.dot(&projection);
-        let pq = PQ::train_pq_using(
+        let pq = Pq::train_pq_using(
             n_subquantizers,
             n_subquantizer_bits,
             n_iterations,
@@ -60,7 +60,7 @@ where
             rng,
         )?;
 
-        Ok(PQ {
+        Ok(Pq {
             projection: Some(projection),
             quantizers: pq.quantizers,
         })
@@ -77,12 +77,12 @@ mod tests {
     use super::GaussianOPQ;
     use crate::linalg::EuclideanDistance;
     use crate::ndarray_rand::RandomExt;
-    use crate::pq::{QuantizeVector, ReconstructVector, TrainPQ, PQ};
+    use crate::pq::{Pq, QuantizeVector, ReconstructVector, TrainPq};
 
     /// Calculate the average euclidean distances between the the given
     /// instances and the instances returned by quantizing and then
     /// reconstructing the instances.
-    fn avg_euclidean_loss(instances: ArrayView2<f32>, quantizer: &PQ<f32>) -> f32 {
+    fn avg_euclidean_loss(instances: ArrayView2<f32>, quantizer: &Pq<f32>) -> f32 {
         let mut euclidean_loss = 0f32;
 
         let quantized: Array2<u8> = quantizer.quantize_batch(instances);
