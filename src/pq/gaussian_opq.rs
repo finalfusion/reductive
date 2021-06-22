@@ -4,7 +4,7 @@ use lax::Lapack;
 use ndarray::{ArrayBase, Data, Ix2, NdFloat};
 use ndarray_linalg::types::Scalar;
 use num_traits::AsPrimitive;
-use rand::{RngCore, SeedableRng};
+use rand::{CryptoRng, RngCore, SeedableRng};
 
 use super::{TrainPQ, OPQ, PQ};
 
@@ -35,11 +35,11 @@ where
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-        rng: R,
-    ) -> PQ<A>
+        rng: &mut R,
+    ) -> Result<PQ<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
-        R: RngCore + SeedableRng + Send,
+        R: CryptoRng + RngCore + SeedableRng + Send,
     {
         PQ::check_quantizer_invariants(
             n_subquantizers,
@@ -58,12 +58,12 @@ where
             n_attempts,
             rx,
             rng,
-        );
+        )?;
 
-        PQ {
+        Ok(PQ {
             projection: Some(projection),
             quantizers: pq.quantizers,
-        }
+        })
     }
 }
 
@@ -72,7 +72,7 @@ mod tests {
     use ndarray::{Array2, ArrayView2};
     use rand::distributions::Uniform;
     use rand::SeedableRng;
-    use rand_xorshift::XorShiftRng;
+    use rand_chacha::ChaCha8Rng;
 
     use super::GaussianOPQ;
     use crate::linalg::EuclideanDistance;
@@ -97,10 +97,10 @@ mod tests {
 
     #[test]
     fn quantize_with_gaussian_opq() {
-        let mut rng = XorShiftRng::seed_from_u64(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
         let uniform = Uniform::new(0f32, 1f32);
         let instances = Array2::random_using((256, 20), uniform, &mut rng);
-        let pq = GaussianOPQ::train_pq_using(10, 7, 10, 1, instances.view(), rng);
+        let pq = GaussianOPQ::train_pq_using(10, 7, 10, 1, instances.view(), &mut rng).unwrap();
         let loss = avg_euclidean_loss(instances.view(), &pq);
         // Loss is around 0.1.
         assert!(loss < 0.12);
