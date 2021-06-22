@@ -23,8 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - name: Install gfortran
-      run: sudo apt-get install gfortran
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
@@ -33,7 +31,7 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --features openblas-test
+        args: --features intel-mkl-test
 
   clippy:
     name: Clippy
