@@ -16,7 +16,7 @@ use super::{QuantizeVector, ReconstructVector, TrainPQ};
 use crate::kmeans::{
     InitialCentroids, KMeansWithCentroids, NIterationsCondition, RandomInstanceCentroids,
 };
-use crate::rng::ReseedOnCloneRng;
+use rand_xorshift::XorShiftRng;
 
 /// Product quantizer (Jégou et al., 2011).
 ///
@@ -194,8 +194,8 @@ where
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-        rng: R,
-    ) -> PQ<A>
+        mut rng: &mut R,
+    ) -> Result<PQ<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
         R: RngCore + SeedableRng + Send,
@@ -208,11 +208,9 @@ where
             instances.view(),
         );
 
-        let rng = ReseedOnCloneRng(rng);
-
-        let rngs = iter::repeat_with(|| rng.clone())
+        let rngs = iter::repeat_with(|| XorShiftRng::from_rng(&mut rng))
             .take(n_subquantizers)
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
 
         let quantizers = rngs
             .into_par_iter()
@@ -233,10 +231,10 @@ where
 
         let views = quantizers.iter().map(|a| a.view()).collect::<Vec<_>>();
 
-        PQ {
+        Ok(PQ {
             projection: None,
             quantizers: concatenate(Axis(0), &views).expect("Cannot concatenate subquantizers"),
-        }
+        })
     }
 }
 
@@ -349,7 +347,7 @@ mod tests {
     use ndarray::{array, Array1, Array2, Array3, ArrayView2};
     use rand::distributions::Uniform;
     use rand::SeedableRng;
-    use rand_xorshift::XorShiftRng;
+    use rand_chacha::ChaCha8Rng;
 
     use super::PQ;
     use crate::linalg::EuclideanDistance;
@@ -427,10 +425,10 @@ mod tests {
 
     #[test]
     fn quantize_with_pq() {
-        let mut rng = XorShiftRng::seed_from_u64(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
         let uniform = Uniform::new(0f32, 1f32);
         let instances = Array2::random_using((256, 20), uniform, &mut rng);
-        let pq = PQ::train_pq_using(10, 7, 10, 1, instances.view(), rng);
+        let pq = PQ::train_pq_using(10, 7, 10, 1, instances.view(), &mut rng).unwrap();
         let loss = avg_euclidean_loss(instances.view(), &pq);
         // Loss is around 0.077.
         assert!(loss < 0.08);

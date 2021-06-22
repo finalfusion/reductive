@@ -1,7 +1,7 @@
 use ndarray::{Array1, Array2, ArrayBase, ArrayViewMut2, Data, Ix1, Ix2};
 use num_traits::{AsPrimitive, Bounded, Zero};
-use rand::{RngCore, SeedableRng};
-use rand_xorshift::XorShiftRng;
+use rand::{CryptoRng, RngCore, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
 use crate::pq::PQ;
 
@@ -23,7 +23,7 @@ pub trait TrainPQ<A> {
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-    ) -> PQ<A>
+    ) -> Result<PQ<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
     {
@@ -33,7 +33,7 @@ pub trait TrainPQ<A> {
             n_iterations,
             n_attempts,
             instances,
-            XorShiftRng::from_entropy(),
+            &mut ChaCha8Rng::from_entropy(),
         )
     }
 
@@ -46,18 +46,20 @@ pub trait TrainPQ<A> {
     /// times, where the best clustering is used.
     ///
     /// `rng` is used for picking the initial cluster centroids of
-    /// each subquantizer.
+    /// each subquantizer. Multiple RNGs are seeded from this RNG,
+    /// so we require a cryptographic RNG to avoid correlations between
+    /// the seeded RNGs.
     fn train_pq_using<S, R>(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-        rng: R,
-    ) -> PQ<A>
+        rng: &mut R,
+    ) -> Result<PQ<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
-        R: RngCore + SeedableRng + Send;
+        R: CryptoRng + RngCore + SeedableRng + Send;
 }
 
 /// Vector quantization.

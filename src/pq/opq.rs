@@ -49,8 +49,8 @@ where
         n_iterations: usize,
         _n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-        mut rng: R,
-    ) -> PQ<A>
+        mut rng: &mut R,
+    ) -> Result<PQ<A>, rand::Error>
     where
         S: Sync + Data<Elem = A>,
         R: RngCore,
@@ -92,10 +92,10 @@ where
             );
         }
 
-        PQ {
+        Ok(PQ {
             projection: Some(projection),
             quantizers,
-        }
+        })
     }
 }
 
@@ -277,7 +277,7 @@ mod tests {
     use ndarray::{array, Array2, ArrayView2};
     use rand::distributions::Uniform;
     use rand::SeedableRng;
-    use rand_xorshift::XorShiftRng;
+    use rand_chacha::ChaCha8Rng;
 
     use super::OPQ;
     use crate::linalg::EuclideanDistance;
@@ -329,10 +329,10 @@ mod tests {
 
     #[test]
     fn quantize_with_opq() {
-        let mut rng = XorShiftRng::seed_from_u64(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
         let uniform = Uniform::new(0f32, 1f32);
         let instances = Array2::random_using((256, 20), uniform, &mut rng);
-        let pq = OPQ::train_pq_using(10, 7, 10, 1, instances.view(), rng);
+        let pq = OPQ::train_pq_using(10, 7, 10, 1, instances.view(), &mut rng).unwrap();
         let loss = avg_euclidean_loss(instances.view(), &pq);
         // Loss is around 0.09.
         assert!(loss < 0.1);

@@ -5,5 +5,3 @@ pub mod linalg;
 pub(crate) mod ndarray_rand;
 
 pub mod pq;
-
-pub(crate) mod rng;
