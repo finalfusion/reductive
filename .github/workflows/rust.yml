@@ -20,6 +20,8 @@ jobs:
           args: --all -- --check
 
   test:
+    env:
+      OPENBLAS_NUM_THREADS: 1
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
