@@ -31,3 +31,4 @@ rand_distr = "0.4"
 default    = []
 opq-train  = ["lax", "ndarray-linalg"]
 openblas-test = ["opq-train", "ndarray-linalg/openblas"]
+intel-mkl-test = ["opq-train", "ndarray-linalg/intel-mkl"]
