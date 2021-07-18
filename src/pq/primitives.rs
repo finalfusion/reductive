@@ -96,7 +96,7 @@ pub fn quantize_batch_into<A, I, S>(
         let assignments = cluster_assignments(quantizer.view(), sub_matrix, Axis(0));
         Zip::from(&mut quantized)
             .and(&assignments)
-            .apply(|quantized, assignment| *quantized = assignment.as_());
+            .for_each(|quantized, assignment| *quantized = assignment.as_());
 
         offset += quantizer.ncols();
     }

@@ -354,7 +354,7 @@ where
     }
 
     // Summed squared error
-    let sse = errors.into_iter().map(|&v| v * v).sum::<A>();
+    let sse = errors.into_iter().map(|v| v * v).sum::<A>();
 
     sse / instances.len().as_()
 }

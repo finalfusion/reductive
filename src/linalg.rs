@@ -245,7 +245,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use approx::AbsDiffEq;
     use ndarray::{array, Axis};
 
     use super::{Covariance, EuclideanDistance, SquaredEuclideanDistance};
