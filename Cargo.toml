@@ -20,6 +20,7 @@ rand_core = "0.6"
 rand_xorshift = "0.3"
 rayon = "1"
 
+accelerate-src = { version = "0.3", optional = true }
 lax = { version = "0.2", optional = true }
 ndarray-linalg = { version = "0.14", optional = true }
 
@@ -29,5 +30,6 @@ rand_distr = "0.4"
 [features]
 default    = []
 opq-train  = ["lax", "ndarray-linalg"]
+accelerate-test = ["opq-train", "accelerate-src"]
 openblas-test = ["opq-train", "ndarray-linalg/openblas"]
 intel-mkl-test = ["opq-train", "ndarray-linalg/intel-mkl"]
