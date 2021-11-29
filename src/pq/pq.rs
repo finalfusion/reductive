@@ -3,8 +3,8 @@ use std::iter::Sum;
 
 use log::info;
 use ndarray::{
-    concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, ArrayView3, ArrayViewMut2, Axis,
-    Data, Ix1, Ix2, NdFloat,
+    concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, ArrayView3, ArrayViewMut1,
+    ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat,
 };
 use num_traits::{AsPrimitive, Bounded, Zero};
 use ordered_float::OrderedFloat;
@@ -330,10 +330,24 @@ where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>,
     {
-        let reconstruction = primitives::reconstruct(self.quantizers.view(), quantized);
-        match self.projection {
-            Some(ref projection) => reconstruction.dot(&projection.t()),
-            None => reconstruction,
+        let mut reconstruction = Array1::zeros((self.reconstructed_len(),));
+        self.reconstruct_vector_into(quantized, reconstruction.view_mut());
+        reconstruction
+    }
+
+    fn reconstruct_vector_into<I, S>(
+        &self,
+        quantized: ArrayBase<S, Ix1>,
+        mut reconstruction: ArrayViewMut1<A>,
+    ) where
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>,
+    {
+        primitives::reconstruct_into(self.quantizers.view(), quantized, reconstruction.view_mut());
+
+        if let Some(ref projection) = self.projection {
+            let projected_reconstruction = reconstruction.dot(&projection.t());
+            reconstruction.assign(&projected_reconstruction);
         }
     }
 

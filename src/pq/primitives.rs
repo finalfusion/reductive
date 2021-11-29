@@ -107,21 +107,6 @@ pub fn reconstructed_len<A>(quantizers: ArrayView3<A>) -> usize {
     quantizers.len_of(Axis(0)) * quantizers.len_of(Axis(2))
 }
 
-pub fn reconstruct<A, I, S>(quantizers: ArrayView3<A>, quantized: ArrayBase<S, Ix1>) -> Array1<A>
-where
-    A: NdFloat,
-    I: AsPrimitive<usize>,
-    S: Data<Elem = I>,
-{
-    let quantized_len = quantizers.len_of(Axis(0));
-    let quantizer_len = quantizers.len_of(Axis(2));
-    let reconstructed_len = quantized_len * quantizer_len;
-
-    let mut reconstruction = Array1::zeros((reconstructed_len,));
-    reconstruct_into(quantizers, quantized, reconstruction.view_mut());
-    reconstruction
-}
-
 pub fn reconstruct_into<A, I, S>(
     quantizers: ArrayView3<A>,
     quantized: ArrayBase<S, Ix1>,
