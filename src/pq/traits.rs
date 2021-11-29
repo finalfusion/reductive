@@ -92,7 +92,7 @@ pub trait QuantizeVector<A> {
 }
 
 /// Vector reconstruction.
-pub trait ReconstructVector<A>
+pub trait Reconstruct<A>
 where
     A: NdFloat + Sum,
 {
@@ -123,20 +123,20 @@ where
     /// Reconstruct a vectors.
     ///
     /// The vector is reconstructed from the quantization indices.
-    fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
+    fn reconstruct<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
     where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>,
     {
         let mut reconstruction = Array1::zeros((self.reconstructed_len(),));
-        self.reconstruct_vector_into(quantized, reconstruction.view_mut());
+        self.reconstruct_into(quantized, reconstruction.view_mut());
         reconstruction
     }
 
     /// Reconstruct a vector into an existing vector.
     ///
     /// The vector is reconstructed from the quantization indices.
-    fn reconstruct_vector_into<I, S>(
+    fn reconstruct_into<I, S>(
         &self,
         quantized: ArrayBase<S, Ix1>,
         reconstruction: ArrayViewMut1<A>,
