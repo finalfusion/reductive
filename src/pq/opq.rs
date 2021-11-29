@@ -282,7 +282,7 @@ mod tests {
     use super::OPQ;
     use crate::linalg::EuclideanDistance;
     use crate::ndarray_rand::RandomExt;
-    use crate::pq::{Pq, QuantizeVector, ReconstructVector, TrainPq};
+    use crate::pq::{Pq, QuantizeVector, Reconstruct, TrainPq};
 
     /// Calculate the average euclidean distances between the the given
     /// instances and the instances returned by quantizing and then

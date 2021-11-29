@@ -17,4 +17,4 @@ mod pq;
 pub use self::pq::Pq;
 
 mod traits;
-pub use self::traits::{QuantizeVector, ReconstructVector, TrainPq};
+pub use self::traits::{QuantizeVector, Reconstruct, TrainPq};

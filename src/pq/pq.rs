@@ -12,7 +12,7 @@ use rand::{Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 
 use super::primitives;
-use super::{QuantizeVector, ReconstructVector, TrainPq};
+use super::{QuantizeVector, Reconstruct, TrainPq};
 use crate::kmeans::{
     InitialCentroids, KMeansWithCentroids, NIterationsCondition, RandomInstanceCentroids,
 };
@@ -291,7 +291,7 @@ where
     }
 }
 
-impl<A> ReconstructVector<A> for Pq<A>
+impl<A> Reconstruct<A> for Pq<A>
 where
     A: NdFloat + Sum,
 {
@@ -315,7 +315,7 @@ where
         }
     }
 
-    fn reconstruct_vector_into<I, S>(
+    fn reconstruct_into<I, S>(
         &self,
         quantized: ArrayBase<S, Ix1>,
         mut reconstruction: ArrayViewMut1<A>,
@@ -346,7 +346,7 @@ mod tests {
     use super::Pq;
     use crate::linalg::EuclideanDistance;
     use crate::ndarray_rand::RandomExt;
-    use crate::pq::{QuantizeVector, ReconstructVector, TrainPq};
+    use crate::pq::{QuantizeVector, Reconstruct, TrainPq};
 
     /// Calculate the average euclidean distances between the the given
     /// instances and the instances returned by quantizing and then
@@ -474,7 +474,7 @@ mod tests {
             .outer_iter()
             .zip(test_reconstructions().outer_iter())
         {
-            assert_eq!(pq.reconstruct_vector(quantization), reconstruction);
+            assert_eq!(pq.reconstruct(quantization), reconstruction);
         }
     }
 }
