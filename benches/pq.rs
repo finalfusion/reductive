@@ -3,7 +3,7 @@ use ndarray::{Array1, Array2};
 use rand_distr::Normal;
 
 use reductive::ndarray_rand::RandomExt;
-use reductive::pq::{QuantizeVector, TrainPq, Pq};
+use reductive::pq::{Pq, QuantizeVector, TrainPq};
 
 fn pq_quantize(c: &mut Criterion) {
     let data: Array2<f64> = Array2::random((100, 128), Normal::new(0., 1.).unwrap());
