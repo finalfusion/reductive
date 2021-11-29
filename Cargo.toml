@@ -25,6 +25,7 @@ lax = { version = "0.2", optional = true }
 ndarray-linalg = { version = "0.14", optional = true }
 
 [dev-dependencies]
+criterion = "0.3"
 rand_distr = "0.4"
 
 [features]
@@ -33,3 +34,11 @@ opq-train  = ["lax", "ndarray-linalg"]
 accelerate-test = ["opq-train", "accelerate-src"]
 openblas-test = ["opq-train", "ndarray-linalg/openblas"]
 intel-mkl-test = ["opq-train", "ndarray-linalg/intel-mkl"]
+
+[[bench]]
+name = "linalg"
+harness = false
+
+[[bench]]
+name = "pq"
+harness = false
