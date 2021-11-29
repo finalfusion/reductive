@@ -295,16 +295,6 @@ impl<A> ReconstructVector<A> for Pq<A>
 where
     A: NdFloat + Sum,
 {
-    fn reconstruct_batch<I, S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
-    where
-        I: AsPrimitive<usize>,
-        S: Data<Elem = I>,
-    {
-        let mut reconstructions = Array2::zeros((quantized.nrows(), self.reconstructed_len()));
-        self.reconstruct_batch_into(quantized, reconstructions.view_mut());
-        reconstructions
-    }
-
     fn reconstruct_batch_into<I, S>(
         &self,
         quantized: ArrayBase<S, Ix2>,
@@ -323,16 +313,6 @@ where
             let projected_reconstruction = reconstructions.dot(&projection.t());
             reconstructions.assign(&projected_reconstruction);
         }
-    }
-
-    fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
-    where
-        I: AsPrimitive<usize>,
-        S: Data<Elem = I>,
-    {
-        let mut reconstruction = Array1::zeros((self.reconstructed_len(),));
-        self.reconstruct_vector_into(quantized, reconstruction.view_mut());
-        reconstruction
     }
 
     fn reconstruct_vector_into<I, S>(
