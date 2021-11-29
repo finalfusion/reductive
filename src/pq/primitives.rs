@@ -3,7 +3,8 @@ use std::iter::Sum;
 #[cfg(feature = "opq-train")]
 use ndarray::Array2;
 use ndarray::{
-    s, Array1, ArrayBase, ArrayView3, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat, Zip,
+    s, Array1, ArrayBase, ArrayView3, ArrayViewMut1, ArrayViewMut2, Axis, Data, Ix1, Ix2, NdFloat,
+    Zip,
 };
 
 use num_traits::{AsPrimitive, Bounded, Zero};
@@ -112,18 +113,53 @@ where
     I: AsPrimitive<usize>,
     S: Data<Elem = I>,
 {
+    let quantized_len = quantizers.len_of(Axis(0));
+    let quantizer_len = quantizers.len_of(Axis(2));
+    let reconstructed_len = quantized_len * quantizer_len;
+
+    let mut reconstruction = Array1::zeros((reconstructed_len,));
+    reconstruct_into(quantizers, quantized, reconstruction.view_mut());
+    reconstruction
+}
+
+pub fn reconstruct_into<A, I, S>(
+    quantizers: ArrayView3<A>,
+    quantized: ArrayBase<S, Ix1>,
+    mut output: ArrayViewMut1<A>,
+) where
+    A: NdFloat,
+    I: AsPrimitive<usize>,
+    S: Data<Elem = I>,
+{
+    let quantized_len = quantizers.len_of(Axis(0));
+    let quantizer_len = quantizers.len_of(Axis(2));
+    let reconstructed_len = reconstructed_len(quantizers.view());
+
     assert_eq!(
-        quantizers.len_of(Axis(0)),
+        quantized_len,
         quantized.len(),
         "Quantization length does not match number of subquantizers"
     );
 
-    let mut reconstruct = Vec::with_capacity(reconstructed_len(quantizers.view()));
-    for (&centroid, quantizer) in quantized.into_iter().zip(quantizers.outer_iter()) {
-        reconstruct.extend(quantizer.index_axis(Axis(0), centroid.as_()));
-    }
+    assert_eq!(
+        reconstructed_len,
+        output.len(),
+        "Reconstructed output length ({}) does not match reconstructed vector length ({})",
+        output.len(),
+        reconstructed_len
+    );
 
-    Array1::from(reconstruct)
+    let mut quantizer_iter = quantizers.outer_iter();
+    let mut quantized_iter = quantized.iter();
+    let mut output_chunks = output.exact_chunks_mut(quantizer_len).into_iter();
+
+    while let (Some(quantizer), Some(centroid), Some(mut output_chunk)) = (
+        quantizer_iter.next(),
+        quantized_iter.next(),
+        output_chunks.next(),
+    ) {
+        output_chunk.assign(&quantizer.index_axis(Axis(0), centroid.as_()));
+    }
 }
 
 pub fn reconstruct_batch_into<A, I, S>(
@@ -145,9 +181,8 @@ pub fn reconstruct_batch_into<A, I, S>(
         reconstructions.ncols()
     );
 
-    for (quantized, mut reconstruction) in
-        quantized.outer_iter().zip(reconstructions.outer_iter_mut())
+    for (quantized, reconstruction) in quantized.outer_iter().zip(reconstructions.outer_iter_mut())
     {
-        reconstruction.assign(&reconstruct(quantizers, quantized));
+        reconstruct_into(quantizers.view(), quantized, reconstruction);
     }
 }
