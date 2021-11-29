@@ -1,4 +1,4 @@
-use ndarray::{Array1, Array2, ArrayBase, ArrayViewMut2, Data, Ix1, Ix2};
+use ndarray::{Array1, Array2, ArrayBase, ArrayViewMut1, ArrayViewMut2, Data, Ix1, Ix2};
 use num_traits::{AsPrimitive, Bounded, Zero};
 use rand::{CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -110,11 +110,22 @@ pub trait ReconstructVector<A> {
         I: AsPrimitive<usize>,
         S: Data<Elem = I>;
 
-    /// Reconstruct a batch of vectors.
+    /// Reconstruct a vectors.
     ///
     /// The vector is reconstructed from the quantization indices.
     fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
     where
+        I: AsPrimitive<usize>,
+        S: Data<Elem = I>;
+
+    /// Reconstruct a vector into an existing vector.
+    ///
+    /// The vector is reconstructed from the quantization indices.
+    fn reconstruct_vector_into<I, S>(
+        &self,
+        quantized: ArrayBase<S, Ix1>,
+        reconstruction: ArrayViewMut1<A>,
+    ) where
         I: AsPrimitive<usize>,
         S: Data<Elem = I>;
 
