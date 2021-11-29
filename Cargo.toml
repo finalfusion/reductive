@@ -24,6 +24,11 @@ accelerate-src = { version = "0.3", optional = true }
 lax = { version = "0.2", optional = true }
 ndarray-linalg = { version = "0.14", optional = true }
 
+# Fix incompatibility between anyhow and intel-mkl tool. Remove with
+# the next release of intel-mkl too. For more information, see:
+# https://github.com/rust-math/intel-mkl-src/issues/68
+anyhow = { version = "<=1.0.48", optional = true }
+
 [dev-dependencies]
 criterion = "0.3"
 rand_distr = "0.4"
@@ -33,7 +38,7 @@ default    = []
 opq-train  = ["lax", "ndarray-linalg"]
 accelerate-test = ["opq-train", "accelerate-src"]
 openblas-test = ["opq-train", "ndarray-linalg/openblas"]
-intel-mkl-test = ["opq-train", "ndarray-linalg/intel-mkl"]
+intel-mkl-test = ["opq-train", "ndarray-linalg/intel-mkl", "anyhow"]
 
 [[bench]]
 name = "linalg"
