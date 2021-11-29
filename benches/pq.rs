@@ -5,9 +5,15 @@ use rand_distr::Normal;
 use reductive::ndarray_rand::RandomExt;
 use reductive::pq::{Pq, QuantizeVector, TrainPq};
 
-fn pq_quantize(c: &mut Criterion) {
-    let data: Array2<f64> = Array2::random((100, 128), Normal::new(0., 1.).unwrap());
+pub fn create_quantizer() -> (Pq<f32>, Array2<f32>) {
+    let data: Array2<f32> = Array2::random((100, 128), Normal::new(0., 1.).unwrap());
     let pq = Pq::train_pq(16, 4, 10, 1, data.view()).unwrap();
+
+    (pq, data)
+}
+
+fn pq_quantize(c: &mut Criterion) {
+    let (pq, data) = create_quantizer();
 
     c.bench_function("pq_quantize", |b| {
         b.iter(|| {
@@ -19,8 +25,7 @@ fn pq_quantize(c: &mut Criterion) {
 }
 
 fn pq_quantize_batch(c: &mut Criterion) {
-    let data: Array2<f64> = Array2::random((100, 128), Normal::new(0., 1.).unwrap());
-    let pq = Pq::train_pq(16, 4, 10, 1, data.view()).unwrap();
+    let (pq, data) = create_quantizer();
 
     c.bench_function("pq_quantize_batch", |b| {
         b.iter(|| pq.quantize_batch::<u8, _>(data.view()))
