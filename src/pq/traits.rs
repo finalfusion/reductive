@@ -1,4 +1,6 @@
-use ndarray::{Array1, Array2, ArrayBase, ArrayViewMut1, ArrayViewMut2, Data, Ix1, Ix2};
+use std::iter::Sum;
+
+use ndarray::{Array1, Array2, ArrayBase, ArrayViewMut1, ArrayViewMut2, Data, Ix1, Ix2, NdFloat};
 use num_traits::{AsPrimitive, Bounded, Zero};
 use rand::{CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -90,14 +92,22 @@ pub trait QuantizeVector<A> {
 }
 
 /// Vector reconstruction.
-pub trait ReconstructVector<A> {
+pub trait ReconstructVector<A>
+where
+    A: NdFloat + Sum,
+{
     /// Reconstruct a batch of vectors.
     ///
     /// The vectors are reconstructed from the quantization indices.
     fn reconstruct_batch<I, S>(&self, quantized: ArrayBase<S, Ix2>) -> Array2<A>
     where
         I: AsPrimitive<usize>,
-        S: Data<Elem = I>;
+        S: Data<Elem = I>,
+    {
+        let mut reconstructions = Array2::zeros((quantized.nrows(), self.reconstructed_len()));
+        self.reconstruct_batch_into(quantized, reconstructions.view_mut());
+        reconstructions
+    }
 
     /// Reconstruct a batch of vectors into an existing matrix.
     ///
@@ -116,7 +126,12 @@ pub trait ReconstructVector<A> {
     fn reconstruct_vector<I, S>(&self, quantized: ArrayBase<S, Ix1>) -> Array1<A>
     where
         I: AsPrimitive<usize>,
-        S: Data<Elem = I>;
+        S: Data<Elem = I>,
+    {
+        let mut reconstruction = Array1::zeros((self.reconstructed_len(),));
+        self.reconstruct_vector_into(quantized, reconstruction.view_mut());
+        reconstruction
+    }
 
     /// Reconstruct a vector into an existing vector.
     ///
