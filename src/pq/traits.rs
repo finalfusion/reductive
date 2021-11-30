@@ -12,7 +12,7 @@ use crate::pq::Pq;
 /// This traits specifies the training functions for product
 /// quantizers.
 pub trait TrainPq<A> {
-    /// Train a product quantizer with the xorshift PRNG.
+    /// Train a product quantizer with a PRNG initialized from entropy.
     ///
     /// Train a product quantizer with `n_subquantizers` subquantizers
     /// on `instances`. Each subquantizer has 2^`quantizer_bits`
