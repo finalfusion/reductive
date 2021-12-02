@@ -1,6 +1,6 @@
 [package]
 name = "reductive"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2018"
 authors = ["Daniël de Kok <me@danieldk.eu>"]
 license = "Apache-2.0"
