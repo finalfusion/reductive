@@ -236,7 +236,7 @@ where
     // ok for our purposes, since we only eigendecompose covariance
     // matrices.
     assert!(
-        eigenvalues[eigenvalue_indices[0]] >= A::zero(),
+        eigenvalues[eigenvalue_indices[0]] >= -A::epsilon(),
         "Bucketing is only supported for positive eigenvalues."
     );
 
