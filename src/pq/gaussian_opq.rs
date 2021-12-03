@@ -7,6 +7,7 @@ use num_traits::AsPrimitive;
 use rand::{CryptoRng, RngCore, SeedableRng};
 
 use super::{Opq, Pq, TrainPq};
+use crate::error::ReductiveError;
 
 /// Optimized product quantizer for Gaussian variables (Ge et al., 2013).
 ///
@@ -36,7 +37,7 @@ where
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         rng: &mut R,
-    ) -> Result<Pq<A>, rand::Error>
+    ) -> Result<Pq<A>, ReductiveError>
     where
         S: Sync + Data<Elem = A>,
         R: CryptoRng + RngCore + SeedableRng + Send,
@@ -47,7 +48,7 @@ where
             n_iterations,
             n_attempts,
             instances.view(),
-        );
+        )?;
 
         let projection = Opq::create_projection_matrix(instances.view(), n_subquantizers);
         let rx = instances.dot(&projection);

@@ -1,6 +1,8 @@
 #[cfg(feature = "accelerate-test")]
 extern crate accelerate_src;
 
+pub mod error;
+
 pub mod kmeans;
 
 pub mod linalg;

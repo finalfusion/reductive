@@ -14,11 +14,11 @@ use ordered_float::OrderedFloat;
 use rand::{Rng, RngCore};
 use rayon::prelude::*;
 
-use crate::kmeans::KMeansIteration;
-use crate::linalg::Covariance;
-
 use super::primitives;
 use super::{Pq, TrainPq};
+use crate::error::ReductiveError;
+use crate::kmeans::KMeansIteration;
+use crate::linalg::Covariance;
 
 /// Optimized product quantizer (Ge et al., 2013).
 ///
@@ -50,7 +50,7 @@ where
         _n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         mut rng: &mut R,
-    ) -> Result<Pq<A>, rand::Error>
+    ) -> Result<Pq<A>, ReductiveError>
     where
         S: Sync + Data<Elem = A>,
         R: RngCore,
@@ -61,7 +61,7 @@ where
             n_iterations,
             1,
             instances.view(),
-        );
+        )?;
 
         // Find initial projection matrix, which will be refined iteratively.
         let mut projection = Self::create_projection_matrix(instances.view(), n_subquantizers);
