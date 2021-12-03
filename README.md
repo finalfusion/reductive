@@ -3,9 +3,9 @@
 ## Training of optimized product quantizers
 
 Training of *optimized* product quantizers requires a LAPACK implementation. For
-this reason, training of the `OPQ` and `GaussianOPQ` quantizers is feature-gated
+this reason, training of the `Opq` and `GaussianOpq` quantizers is feature-gated
 by the `opq-train` feature.  This feature must be enabled if you want to use
-`OPQ` or `GaussianOPQ`:
+`Opq` or `GaussianOpq`:
 
 ~~~toml
 [dependencies]

@@ -29,15 +29,15 @@ use super::{Pq, TrainPq};
 ///
 /// This quantizer learns a orthonormal matrix that rotates the input
 /// space in order to balance variances over subquantizers. If the
-/// variables have a Gaussian distribution, `GaussianOPQ` is faster to
+/// variables have a Gaussian distribution, `GaussianOpq` is faster to
 /// train than this quantizer.
 ///
 /// This quantizer always trains the quantizer in one attempt, so the
 /// `n_attempts` argument of the `TrainPQ` constructors currently has
 /// no effect.
-pub struct OPQ;
+pub struct Opq;
 
-impl<A> TrainPq<A> for OPQ
+impl<A> TrainPq<A> for Opq
 where
     A: Lapack + NdFloat + Scalar + Sum,
     A::Real: NdFloat,
@@ -99,7 +99,7 @@ where
     }
 }
 
-impl OPQ {
+impl Opq {
     pub(crate) fn create_projection_matrix<A>(
         instances: ArrayView2<A>,
         n_subquantizers: usize,
@@ -279,7 +279,7 @@ mod tests {
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
-    use super::OPQ;
+    use super::Opq;
     use crate::linalg::EuclideanDistance;
     use crate::ndarray_rand::RandomExt;
     use crate::pq::{Pq, QuantizeVector, Reconstruct, TrainPq};
@@ -332,7 +332,7 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let uniform = Uniform::new(0f32, 1f32);
         let instances = Array2::random_using((256, 20), uniform, &mut rng);
-        let pq = OPQ::train_pq_using(10, 7, 10, 1, instances.view(), &mut rng).unwrap();
+        let pq = Opq::train_pq_using(10, 7, 10, 1, instances.view(), &mut rng).unwrap();
         let loss = avg_euclidean_loss(instances.view(), &pq);
         // Loss is around 0.09.
         assert!(loss < 0.1);

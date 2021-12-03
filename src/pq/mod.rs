@@ -3,12 +3,12 @@
 #[cfg(feature = "opq-train")]
 mod gaussian_opq;
 #[cfg(feature = "opq-train")]
-pub use gaussian_opq::GaussianOPQ;
+pub use gaussian_opq::GaussianOpq;
 
 #[cfg(feature = "opq-train")]
 mod opq;
 #[cfg(feature = "opq-train")]
-pub use self::opq::OPQ;
+pub use self::opq::Opq;
 
 pub(crate) mod primitives;
 

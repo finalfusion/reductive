@@ -6,7 +6,7 @@ use ndarray_linalg::types::Scalar;
 use num_traits::AsPrimitive;
 use rand::{CryptoRng, RngCore, SeedableRng};
 
-use super::{Pq, TrainPq, OPQ};
+use super::{Opq, Pq, TrainPq};
 
 /// Optimized product quantizer for Gaussian variables (Ge et al., 2013).
 ///
@@ -18,12 +18,12 @@ use super::{Pq, TrainPq, OPQ};
 /// This quantizer learns a orthonormal matrix that rotates the input
 /// space in order to balance variances over subquantizers. The
 /// optimization procedure assumes that the variables have a Gaussian
-/// distribution. The `OPQ` quantizer provides a non-parametric,
+/// distribution. The `Opq` quantizer provides a non-parametric,
 /// albeit slower to train implementation of optimized product
 /// quantization.
-pub struct GaussianOPQ;
+pub struct GaussianOpq;
 
-impl<A> TrainPq<A> for GaussianOPQ
+impl<A> TrainPq<A> for GaussianOpq
 where
     A: Lapack + NdFloat + Scalar + Sum,
     A::Real: NdFloat,
@@ -49,7 +49,7 @@ where
             instances.view(),
         );
 
-        let projection = OPQ::create_projection_matrix(instances.view(), n_subquantizers);
+        let projection = Opq::create_projection_matrix(instances.view(), n_subquantizers);
         let rx = instances.dot(&projection);
         let pq = Pq::train_pq_using(
             n_subquantizers,
@@ -74,7 +74,7 @@ mod tests {
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
-    use super::GaussianOPQ;
+    use super::GaussianOpq;
     use crate::linalg::EuclideanDistance;
     use crate::ndarray_rand::RandomExt;
     use crate::pq::{Pq, QuantizeVector, Reconstruct, TrainPq};
@@ -100,7 +100,7 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let uniform = Uniform::new(0f32, 1f32);
         let instances = Array2::random_using((256, 20), uniform, &mut rng);
-        let pq = GaussianOPQ::train_pq_using(10, 7, 10, 1, instances.view(), &mut rng).unwrap();
+        let pq = GaussianOpq::train_pq_using(10, 7, 10, 1, instances.view(), &mut rng).unwrap();
         let loss = avg_euclidean_loss(instances.view(), &pq);
         // Loss is around 0.1.
         assert!(loss < 0.12);
