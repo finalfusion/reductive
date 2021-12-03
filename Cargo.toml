@@ -19,6 +19,7 @@ rand_chacha = "0.3"
 rand_core = "0.6"
 rand_xorshift = "0.3"
 rayon = "1"
+thiserror = "1"
 
 accelerate-src = { version = "0.3", optional = true }
 lax = { version = "0.2", optional = true }

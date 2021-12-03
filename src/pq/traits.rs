@@ -5,6 +5,7 @@ use num_traits::{AsPrimitive, Bounded, Zero};
 use rand::{CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
+use crate::error::ReductiveError;
 use crate::pq::Pq;
 
 /// Training triat for product quantizers.
@@ -19,13 +20,16 @@ pub trait TrainPq<A> {
     /// centroids.  The subquantizers are trained with `n_iterations`
     /// k-means iterations. Each subquantizer is trained `n_attempts`
     /// times, where the best clustering is used.
+    ///
+    /// An error is returned when the combination of hyperparameters is
+    /// incorrect.
     fn train_pq<S>(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
-    ) -> Result<Pq<A>, rand::Error>
+    ) -> Result<Pq<A>, ReductiveError>
     where
         S: Sync + Data<Elem = A>,
     {
@@ -51,6 +55,9 @@ pub trait TrainPq<A> {
     /// each subquantizer. Multiple RNGs are seeded from this RNG,
     /// so we require a cryptographic RNG to avoid correlations between
     /// the seeded RNGs.
+    ///
+    /// An error is returned when the combination of hyperparameters is
+    /// incorrect.
     fn train_pq_using<S, R>(
         n_subquantizers: usize,
         n_subquantizer_bits: u32,
@@ -58,7 +65,7 @@ pub trait TrainPq<A> {
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         rng: &mut R,
-    ) -> Result<Pq<A>, rand::Error>
+    ) -> Result<Pq<A>, ReductiveError>
     where
         S: Sync + Data<Elem = A>,
         R: CryptoRng + RngCore + SeedableRng + Send;

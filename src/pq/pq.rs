@@ -9,14 +9,15 @@ use ndarray::{
 use num_traits::{AsPrimitive, Bounded, Zero};
 use ordered_float::OrderedFloat;
 use rand::{Rng, RngCore, SeedableRng};
+use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 
 use super::primitives;
 use super::{QuantizeVector, Reconstruct, TrainPq};
+use crate::error::ReductiveError;
 use crate::kmeans::{
     InitialCentroids, KMeansWithCentroids, NIterationsCondition, RandomInstanceCentroids,
 };
-use rand_xorshift::XorShiftRng;
 
 /// Product quantizer (Jégou et al., 2011).
 ///
@@ -65,28 +66,37 @@ where
         n_iterations: usize,
         n_attempts: usize,
         instances: ArrayView2<A>,
-    ) {
-        assert!(
-            n_subquantizers > 0 && n_subquantizers <= instances.ncols(),
-            "The number of subquantizers should at least be 1 and at most be {}.",
-            instances.ncols()
-        );
-        assert!(
-            n_subquantizer_bits > 0,
-            "Number of quantizer bits should at least be one."
-        );
-        assert!(
-            instances.ncols() % n_subquantizers == 0,
-            "The number of subquantizers should evenly divide each instance."
-        );
-        assert!(
-            n_iterations > 0,
-            "The subquantizers should be optimized for at least one iteration."
-        );
-        assert!(
-            n_attempts > 0,
-            "The subquantizers should be optimized for at least one attempt."
-        );
+    ) -> Result<(), ReductiveError> {
+        if n_subquantizers == 0 || n_subquantizers > instances.ncols() {
+            return Err(ReductiveError::NSubquantizersOutsideRange {
+                n_subquantizers,
+                max_subquantizers: instances.ncols(),
+            });
+        }
+
+        let max_subquantizer_bits = (instances.nrows() as f64).log2().trunc() as u32;
+        if n_subquantizer_bits == 0 || n_subquantizer_bits > max_subquantizer_bits {
+            return Err(ReductiveError::IncorrectNSubquantizerBits {
+                max_subquantizer_bits,
+            });
+        }
+
+        if instances.ncols() % n_subquantizers != 0 {
+            return Err(ReductiveError::IncorrectNumberSubquantizers {
+                n_subquantizers,
+                n_columns: instances.ncols(),
+            });
+        }
+
+        if n_iterations == 0 {
+            return Err(ReductiveError::IncorrectNIterations);
+        }
+
+        if n_attempts == 0 {
+            return Err(ReductiveError::IncorrectNAttempts);
+        }
+
+        Ok(())
     }
 
     /// Get the number of centroids per quantizer.
@@ -195,7 +205,7 @@ where
         n_attempts: usize,
         instances: ArrayBase<S, Ix2>,
         mut rng: &mut R,
-    ) -> Result<Pq<A>, rand::Error>
+    ) -> Result<Pq<A>, ReductiveError>
     where
         S: Sync + Data<Elem = A>,
         R: RngCore + SeedableRng + Send,
@@ -206,11 +216,12 @@ where
             n_iterations,
             n_attempts,
             instances.view(),
-        );
+        )?;
 
         let rngs = iter::repeat_with(|| XorShiftRng::from_rng(&mut rng))
             .take(n_subquantizers)
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ReductiveError::ConstructRng)?;
 
         let quantizers = rngs
             .into_par_iter()
